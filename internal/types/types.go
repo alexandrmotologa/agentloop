@@ -8,11 +8,12 @@ import (
 type ExecutionStatus string
 
 const (
-	StatusPending   ExecutionStatus = "PENDING"
-	StatusRunning   ExecutionStatus = "RUNNING"
-	StatusCompleted ExecutionStatus = "COMPLETED"
-	StatusFailed    ExecutionStatus = "FAILED"
-	StatusPausedDLQ ExecutionStatus = "PAUSED_DLQ"
+	StatusPending    ExecutionStatus = "PENDING"
+	StatusRunning    ExecutionStatus = "RUNNING"
+	StatusCompleted  ExecutionStatus = "COMPLETED"
+	StatusFailed     ExecutionStatus = "FAILED"
+	StatusPausedDLQ  ExecutionStatus = "PAUSED_DLQ"
+	StatusBreakpoint ExecutionStatus = "HALTED_BREAKPOINT"
 )
 
 // NodeStatus represents the state of an individual node in an execution.
@@ -25,6 +26,7 @@ const (
 	NodeStatusHealed  NodeStatus = "HEALED"
 	NodeStatusFailed  NodeStatus = "FAILED"
 	NodeStatusPaused  NodeStatus = "PAUSED"
+	NodeStatusHalted  NodeStatus = "HALTED"
 )
 
 // NodeType represents the kind of operation performed by a node.
@@ -43,28 +45,39 @@ type WorkflowSpec struct {
 	Version       string                 `json:"version" yaml:"version"`
 	Workflow      WorkflowMetadata       `json:"workflow" yaml:"workflow"`
 	Models        map[string]ModelConfig `json:"models" yaml:"models"`
+	Budget        *BudgetConfig          `json:"budget,omitempty" yaml:"budget,omitempty"`
 	State         map[string]any         `json:"state" yaml:"state"`
 	Nodes         []NodeSpec             `json:"nodes" yaml:"nodes"`
 	Notifications NotificationConfig     `json:"notifications" yaml:"notifications"`
 }
 
-// WorkflowMetadata contains identification and global constraints.
+// WorkflowMetadata contains identification, scheduling, and constraints.
 type WorkflowMetadata struct {
 	ID                 string `json:"id" yaml:"id"`
 	Name               string `json:"name" yaml:"name"`
 	Description        string `json:"description" yaml:"description"`
 	Timeout            string `json:"timeout" yaml:"timeout"`
 	MaxHealingAttempts int    `json:"max_healing_attempts" yaml:"max_healing_attempts"`
+	Schedule           string `json:"schedule,omitempty" yaml:"schedule,omitempty"` // Cron schedule (e.g. "0 * * * *")
+	WebhookSecret      string `json:"webhook_secret,omitempty" yaml:"webhook_secret,omitempty"`
+}
+
+// BudgetConfig enforces token and financial spending limits on an execution.
+type BudgetConfig struct {
+	MaxTotalTokens int     `json:"max_total_tokens,omitempty" yaml:"max_total_tokens,omitempty"`
+	MaxCostUSD     float64 `json:"max_cost_usd,omitempty" yaml:"max_cost_usd,omitempty"`
+	OnExceeded     string  `json:"on_exceeded,omitempty" yaml:"on_exceeded,omitempty"` // pause_to_dlq, abort
 }
 
 // ModelConfig configures an LLM provider and model parameters.
 type ModelConfig struct {
-	Provider    string  `json:"provider" yaml:"provider"` // openai, anthropic, ollama, mock
-	Model       string  `json:"model" yaml:"model"`
-	Temperature float64 `json:"temperature" yaml:"temperature"`
-	MaxTokens   int     `json:"max_tokens" yaml:"max_tokens"`
-	BaseURL     string  `json:"base_url" yaml:"base_url"`
-	APIKeyEnv   string  `json:"api_key_env" yaml:"api_key_env"`
+	Provider       string   `json:"provider" yaml:"provider"` // openai, anthropic, ollama, mock
+	Model          string   `json:"model" yaml:"model"`
+	Temperature    float64  `json:"temperature" yaml:"temperature"`
+	MaxTokens      int      `json:"max_tokens" yaml:"max_tokens"`
+	BaseURL        string   `json:"base_url" yaml:"base_url"`
+	APIKeyEnv      string   `json:"api_key_env" yaml:"api_key_env"`
+	FallbackModels []string `json:"fallback_models,omitempty" yaml:"fallback_models,omitempty"`
 }
 
 // NodeSpec defines a single execution step within the workflow DAG.
@@ -85,6 +98,8 @@ type NodeSpec struct {
 	Retry               *RetryConfig       `json:"retry,omitempty" yaml:"retry,omitempty"`
 	Conditions          []ConditionRule    `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 	SaveTo              string             `json:"save_to,omitempty" yaml:"save_to,omitempty"`
+	Breakpoint          bool               `json:"breakpoint,omitempty" yaml:"breakpoint,omitempty"`
+	FallbackModels      []string           `json:"fallback_models,omitempty" yaml:"fallback_models,omitempty"`
 }
 
 // LowConfidenceRule dictates sentinel behavior when output confidence falls below threshold.
@@ -136,6 +151,10 @@ type Execution struct {
 	CurrentNodeID   string          `json:"current_node_id"`
 	State           map[string]any  `json:"state"`
 	HealingAttempts int             `json:"healing_attempts"`
+	TotalTokens     int             `json:"total_tokens"`
+	TotalCostUSD    float64         `json:"total_cost_usd"`
+	Breakpoints     []string        `json:"breakpoints,omitempty"`
+	IsStepping      bool            `json:"is_stepping,omitempty"`
 	StartedAt       time.Time       `json:"started_at"`
 	UpdatedAt       time.Time       `json:"updated_at"`
 	CompletedAt     *time.Time      `json:"completed_at,omitempty"`

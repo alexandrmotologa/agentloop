@@ -15,6 +15,9 @@ const (
 	EventSelfHealing       ExecutionEventType = "self_healing_attempt"
 	EventDLQPaused         ExecutionEventType = "dlq_paused"
 	EventExecutionResumed  ExecutionEventType = "execution_resumed"
+	EventBreakpointHit     ExecutionEventType = "breakpoint_hit"
+	EventBudgetExceeded    ExecutionEventType = "budget_exceeded"
+	EventModelCascaded     ExecutionEventType = "model_cascaded"
 	EventWorkflowCompleted ExecutionEventType = "workflow_completed"
 	EventWorkflowFailed    ExecutionEventType = "workflow_failed"
 )

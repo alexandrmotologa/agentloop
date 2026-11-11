@@ -16,8 +16,10 @@ func (db *DB) CreateExecution(exec *types.Execution) error {
 	}
 
 	query := `
-	INSERT INTO executions (id, workflow_id, status, current_node_id, state_json, healing_attempts, started_at, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+	INSERT INTO executions (
+		id, workflow_id, status, current_node_id, state_json, healing_attempts,
+		total_tokens, total_cost_usd, started_at, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	now := time.Now()
 	if exec.StartedAt.IsZero() {
@@ -32,6 +34,8 @@ func (db *DB) CreateExecution(exec *types.Execution) error {
 		exec.CurrentNodeID,
 		string(stateJSON),
 		exec.HealingAttempts,
+		exec.TotalTokens,
+		exec.TotalCostUSD,
 		exec.StartedAt,
 		exec.UpdatedAt,
 	)
@@ -53,6 +57,8 @@ func (db *DB) UpdateExecution(exec *types.Execution) error {
 		current_node_id = ?,
 		state_json = ?,
 		healing_attempts = ?,
+		total_tokens = ?,
+		total_cost_usd = ?,
 		updated_at = ?,
 		completed_at = ?
 	WHERE id = ?
@@ -64,6 +70,8 @@ func (db *DB) UpdateExecution(exec *types.Execution) error {
 		exec.CurrentNodeID,
 		string(stateJSON),
 		exec.HealingAttempts,
+		exec.TotalTokens,
+		exec.TotalCostUSD,
 		exec.UpdatedAt,
 		exec.CompletedAt,
 		exec.ID,
@@ -76,7 +84,8 @@ func (db *DB) UpdateExecution(exec *types.Execution) error {
 
 func (db *DB) GetExecution(id string) (*types.Execution, error) {
 	query := `
-	SELECT id, workflow_id, status, current_node_id, state_json, healing_attempts, started_at, updated_at, completed_at
+	SELECT id, workflow_id, status, current_node_id, state_json, healing_attempts,
+	       total_tokens, total_cost_usd, started_at, updated_at, completed_at
 	FROM executions
 	WHERE id = ?
 	`
@@ -91,6 +100,8 @@ func (db *DB) GetExecution(id string) (*types.Execution, error) {
 		&exec.CurrentNodeID,
 		&stateJSON,
 		&exec.HealingAttempts,
+		&exec.TotalTokens,
+		&exec.TotalCostUSD,
 		&exec.StartedAt,
 		&exec.UpdatedAt,
 		&completedAt,
@@ -126,7 +137,8 @@ func (db *DB) ListExecutions(limit int, status string) ([]types.Execution, error
 
 	if status != "" {
 		query := `
-		SELECT id, workflow_id, status, current_node_id, state_json, healing_attempts, started_at, updated_at, completed_at
+		SELECT id, workflow_id, status, current_node_id, state_json, healing_attempts,
+		       total_tokens, total_cost_usd, started_at, updated_at, completed_at
 		FROM executions
 		WHERE status = ?
 		ORDER BY started_at DESC
@@ -135,7 +147,8 @@ func (db *DB) ListExecutions(limit int, status string) ([]types.Execution, error
 		rows, err = db.Query(query, status, limit)
 	} else {
 		query := `
-		SELECT id, workflow_id, status, current_node_id, state_json, healing_attempts, started_at, updated_at, completed_at
+		SELECT id, workflow_id, status, current_node_id, state_json, healing_attempts,
+		       total_tokens, total_cost_usd, started_at, updated_at, completed_at
 		FROM executions
 		ORDER BY started_at DESC
 		LIMIT ?
@@ -161,6 +174,8 @@ func (db *DB) ListExecutions(limit int, status string) ([]types.Execution, error
 			&exec.CurrentNodeID,
 			&stateJSON,
 			&exec.HealingAttempts,
+			&exec.TotalTokens,
+			&exec.TotalCostUSD,
 			&exec.StartedAt,
 			&exec.UpdatedAt,
 			&completedAt,
@@ -218,4 +233,25 @@ func (db *DB) GetSnapshots(executionID string) ([]types.StateSnapshot, error) {
 		snapshots = append(snapshots, s)
 	}
 	return snapshots, nil
+}
+
+// CheckAndSetIdempotency verifies if a webhook or trigger idempotency key has already been processed.
+func (db *DB) CheckAndSetIdempotency(key string, workflowID string, executionID string) (bool, string, error) {
+	var existingExecID string
+	err := db.QueryRow("SELECT execution_id FROM idempotency_keys WHERE key = ?", key).Scan(&existingExecID)
+	if err == nil {
+		// Key already exists!
+		return true, existingExecID, nil
+	}
+	if err != sql.ErrNoRows {
+		return false, "", err
+	}
+
+	// Insert new key
+	_, err = db.Exec("INSERT INTO idempotency_keys (key, workflow_id, execution_id) VALUES (?, ?, ?)", key, workflowID, executionID)
+	if err != nil {
+		return false, "", err
+	}
+
+	return false, "", nil
 }

@@ -8,13 +8,14 @@ agentloop is a deterministic workflow engine written in Go with an embedded Reac
 
 ## The Problem
 
-More than 85% of autonomous AI agent pilots stall or fail in production environments due to three recurring failure modes:
+More than 85% of autonomous AI agent pilots stall or fail in production environments due to recurring failure modes:
 
 1. Brittle Tool Execution: Third-party APIs change field names, time out, or return 502 Bad Gateway responses. Unconstrained agents enter recursive retry loops or hallucinate parameters.
 2. Context and State Loss: If a multi-step business process fails at step 5 of 6, typical agent frameworks discard the entire transaction without an ability to rewind and repair context.
 3. Lack of Human Safety Nets: When an agent encounters low confidence or unrecoverable schema errors, it either makes an unverified guess or crashes without an escalation path.
+4. Runaway Spend and Unpredictable Costs: Infinite reflection loops or prompt explosions rapidly deplete API quotas without deterministic circuit breakers.
 
-agentloop resolves these issues by combining deterministic directed acyclic graphs (DAGs) with an autonomous self-healing sentinel, checkpoint state freezing, and an operator console.
+agentloop resolves these issues by combining deterministic directed acyclic graphs (DAGs) with autonomous self-healing sentinels, token and cost budget guards, checkpoint state freezing, and an operator console.
 
 ---
 
@@ -22,11 +23,18 @@ agentloop resolves these issues by combining deterministic directed acyclic grap
 
 - Deterministic Workflow DAG: Combines deterministic business logic (HTTP REST, SQL queries, JSON expression transforms) with probabilistic LLM reasoning nodes.
 - Autonomous Self-Healing Loop: When a node fails schema validation or confidence checks, an internal reflection engine analyzes the error, categorizes the fault, and synthesizes a surgical repair prompt without losing prior state.
-- Dead-Letter Queue (DLQ) & Checkpoint Freezing: When healing attempts exceed configured bounds or low confidence thresholds are reached, the execution freezes at the exact node, persisting full serialized memory state to SQLite WAL storage.
+- Cost & Token Budget Sentinel: Enforces hard limits on token usage and estimated dollar spend per execution. If limits are reached, the execution freezes to DLQ to prevent cost overruns.
+- Multi-Model Fallback Cascades: Automatically fails over across providers (e.g. OpenAI to Anthropic or local Ollama) if a primary model is throttled or times out.
+- Webhook Ingestion Gateway: Ingests external webhook triggers with HMAC-SHA256 signature verification and idempotency keys to prevent duplicate execution.
+- Lightweight Cron Scheduler: Runs scheduled workflows deterministically using standard cron expressions and interval descriptors.
+- Breakpoint & Step-Through Debugger: Allows developers to set execution breakpoints on DAG nodes, step forward node-by-node, inspect memory state, and resume execution.
+- Side-by-Side Visual State Diff: Visualizes state deltas between baseline state and frozen DLQ memory in the React 19 console with highlight styling for added, modified, and removed variables.
+- Compliance Audit Report Exporter: Compiles end-to-end execution lineage, token budgets, self-healing events, and operator actions into GitHub-flavored Markdown or structured JSON.
+- Dead-Letter Queue (DLQ) & Checkpoint Freezing: When healing attempts exceed configured bounds or low confidence thresholds are reached, execution freezes at the exact node, persisting full serialized memory state to SQLite WAL storage.
 - Embedded React 19 HITL Cockpit: Operators inspect live DAG execution progress, review error traces, edit memory variables, provide natural language guidance, and resume executions with one click.
 - State Rewind & Time-Travel: Allows operators to roll back execution state to any prior node snapshot and resume execution from that point.
 - Single-Binary Deployment: Compiles into a single standalone binary with embedded React 19 frontend assets via Go embed.
-- Sub-25ms Execution Overhead: Core state machine transitions execute in sub-millisecond to low single-digit millisecond latency.
+- Sub-25ms Execution Overhead: Core state machine transitions execute with sub-millisecond to low single-digit millisecond latency.
 
 ---
 
@@ -35,7 +43,7 @@ agentloop resolves these issues by combining deterministic directed acyclic grap
 ```
                                   +---------------------------------------+
                                   |         Enterprise Trigger            |
-                                  | (Webhook, Cron, Queue, Manual CLI/UI) |
+                                  | (Webhook HMAC, Cron, Manual CLI / UI) |
                                   +---------------------------------------+
                                                       |
                                                       v
@@ -51,7 +59,7 @@ agentloop resolves these issues by combining deterministic directed acyclic grap
          |    Deterministic Step Nodes   |                         |      Agentic LLM Nodes        |
          |  - HTTP REST / GraphQL        |                         |  - Reasoning & Planning       |
          |  - SQLite / SQL Queries       |                         |  - Multimodal Extraction      |
-         |  - Data Transform (Expr/JSON) |                         |  - Structured Tool Calling    |
+         |  - Data Transform (Expr/JSON) |                         |  - Multi-Model Cascades       |
          |  - Sandboxed File I/O         |                         |  - Schema-Enforced Generation |
          +-------------------------------+                         +-------------------------------+
                          |                                                         |
@@ -62,17 +70,18 @@ agentloop resolves these issues by combining deterministic directed acyclic grap
                                        |      Execution Sentinel      |
                                        | - JSON Schema Validation     |
                                        | - Confidence Scoring (<0.85) |
-                                       | - Execution Budget / Timeout |
+                                       | - Token & Cost Budget Guard  |
+                                       | - Breakpoint Interceptor     |
                                        +------------------------------+
                                                       |
                                    +------------------+------------------+
-                                   | (Success)                           | (Failure / Low Confidence)
+                                   | (Success)                           | (Failure / Low Confidence / Budget)
                                    v                                     v
                        +----------------------+          +------------------------------+
                        | Transition Next Node |          |     Self-Healing Engine      |
                        +----------------------+          | - Error Classification       |
-                                                         | - Dynamic Prompt Mutation    |
-                                                         | - Fallback Tool Selection    |
+                                                         | - Surgical Prompt Mutation   |
+                                                         | - Model Fallback Cascade     |
                                                          | - Exponential Backoff        |
                                                          +------------------------------+
                                                                          |
@@ -82,16 +91,17 @@ agentloop resolves these issues by combining deterministic directed acyclic grap
                                           +----------------------+          +------------------------------+
                                           | Resume Execution DAG |          |    Dead-Letter Queue (DLQ)   |
                                           +----------------------+          | - State Freeze & Snapshot    |
-                                                                            | - Alerting (Slack/Teams/Web) |
+                                                                            | - Alerting (Slack/Webhooks)  |
                                                                             +------------------------------+
                                                                                             |
                                                                                             v
                                                                             +------------------------------+
                                                                             |     Embedded HITL Cockpit    |
-                                                                            |  - Visual State Inspection   |
-                                                                            |  - Interactive Variable Edit |
+                                                                            |  - Visual State Diff (Added) |
+                                                                            |  - Step Debugger (F10/F5)    |
                                                                             |  - One-Click Resume / Abort  |
                                                                             |  - State Rewind Time-Travel  |
+                                                                            |  - Compliance Report Export  |
                                                                             +------------------------------+
 ```
 
@@ -133,7 +143,12 @@ Output:
 ./agentloop run --file ./examples/invoice_reconciliation.yaml
 ```
 
-### 4. Start the Web Console
+### 4. Generate Compliance Report
+```bash
+./agentloop report --id exec_734800df --format markdown --out audit_report.md
+```
+
+### 5. Start the Web Console & Scheduler
 ```bash
 ./agentloop serve --port 8080 --db ./agentloop.db
 ```
@@ -153,12 +168,20 @@ workflow:
   name: "Automated Vendor Invoice Auditing"
   timeout: "5m"
   max_healing_attempts: 3
+  schedule: "@hourly" # Optional recurring schedule
+  webhook_secret: "prod-secret-key" # Optional HMAC-SHA256 secret
+
+budget:
+  max_total_tokens: 50000
+  max_cost_usd: 0.25
+  on_exceeded: "pause_to_dlq"
 
 models:
   primary:
     provider: "openai" # openai, anthropic, ollama, or mock
     model: "gpt-4o"
     temperature: 0.1
+    fallback_models: ["gpt-4o-mini", "claude-3-5-sonnet"]
   healing:
     provider: "openai"
     model: "gpt-4o-mini"
@@ -206,6 +229,7 @@ nodes:
 
   - id: "reconcile_and_audit"
     type: "llm_agent"
+    breakpoint: false # Toggle to true to pause execution before this node
     prompt: |
       Compare extracted invoice total {{ .state.extracted_data.total_amount }} with ERP PO total {{ .state.erp_purchase_order.total_amount }}.
       Flag any price variance greater than 2% or unknown line items.
@@ -276,12 +300,18 @@ Resume execution with natural language operator directive and state patch:
 | `/api/workflows` | POST | Upload and validate new workflow YAML |
 | `/api/workflows/{id}` | GET | Get workflow specification and raw YAML |
 | `/api/workflows/{id}/run` | POST | Trigger workflow execution with JSON payload |
+| `/api/webhooks/{id}` | POST | Ingest webhook event with HMAC-SHA256 and idempotency check |
+| `/api/cron/jobs` | GET | List all active scheduled recurring jobs |
 | `/api/executions` | GET | List execution instances (filterable by status) |
 | `/api/executions/{id}` | GET | Get execution details and current state |
 | `/api/executions/{id}/audit` | GET | Get compliance step audit log |
 | `/api/executions/{id}/healing` | GET | Get self-healing attempt history |
 | `/api/executions/{id}/snapshots` | GET | Get state snapshots for time-travel |
 | `/api/executions/{id}/rewind` | POST | Roll back state to target node snapshot |
+| `/api/executions/{id}/step` | POST | Single-step forward from a breakpoint halt |
+| `/api/executions/{id}/continue` | POST | Resume execution run from a breakpoint |
+| `/api/executions/{id}/breakpoints` | POST | Configure active breakpoints on execution |
+| `/api/executions/{id}/report` | GET | Download compliance audit report (Markdown or JSON) |
 | `/api/dlq` | GET | List Dead-Letter Queue items |
 | `/api/dlq/{id}` | GET | Get DLQ item details and snapshot state |
 | `/api/dlq/{id}/resume` | POST | Resume execution with operator directive and state patch |
@@ -297,7 +327,7 @@ Resume execution with natural language operator directive and state patch:
 | Node Transition Overhead | &lt; 25ms | ~0.37ms - 1.1ms |
 | DAG Cycle Validation | Instant | &lt; 50µs |
 | SQLite State Snapshot Persistence | &lt; 5ms (WAL mode) | ~0.2ms |
-| Frontend Asset Bundle Size | Minimal | 85 kB gzipped |
+| Frontend Asset Bundle Size | Minimal | 89 kB gzipped |
 
 ---
 

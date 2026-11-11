@@ -23,7 +23,7 @@ func TestAPIEndpoints(t *testing.T) {
 
 	dlqMgr := dlq.NewManager(db)
 	executor := engine.NewExecutor(db, dlqMgr)
-	router := api.NewRouter(db, executor, nil)
+	router := api.NewRouter(db, executor, nil, nil)
 
 	// 1. Health check
 	req := httptest.NewRequest("GET", "/api/health", nil)

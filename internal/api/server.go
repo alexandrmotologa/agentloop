@@ -7,18 +7,25 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/alexandrmotologa/agentloop/internal/cron"
 	"github.com/alexandrmotologa/agentloop/internal/engine"
 	"github.com/alexandrmotologa/agentloop/internal/store"
 )
 
-// Server encapsulates the HTTP server lifecycle.
+// Server encapsulates the HTTP server lifecycle and background scheduler.
 type Server struct {
 	httpServer *http.Server
+	scheduler  *cron.Scheduler
 }
 
 // StartServer initializes and begins listening on the configured address.
 func StartServer(addr string, db *store.DB, executor *engine.Executor, webFS fs.FS) (*Server, error) {
-	router := NewRouter(db, executor, webFS)
+	scheduler := cron.NewScheduler(db, executor)
+	if err := scheduler.Start(); err != nil {
+		log.Printf("[SCHEDULER] warning: could not start scheduler: %v", err)
+	}
+
+	router := NewRouter(db, executor, scheduler, webFS)
 
 	httpSrv := &http.Server{
 		Addr:         addr,
@@ -30,6 +37,7 @@ func StartServer(addr string, db *store.DB, executor *engine.Executor, webFS fs.
 
 	server := &Server{
 		httpServer: httpSrv,
+		scheduler:  scheduler,
 	}
 
 	go func() {
@@ -42,7 +50,10 @@ func StartServer(addr string, db *store.DB, executor *engine.Executor, webFS fs.
 	return server, nil
 }
 
-// Shutdown gracefully terminates the server.
+// Shutdown gracefully terminates the server and background scheduler.
 func (s *Server) Shutdown(ctx context.Context) error {
+	if s.scheduler != nil {
+		s.scheduler.Stop()
+	}
 	return s.httpServer.Shutdown(ctx)
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/alexandrmotologa/agentloop/internal/cron"
 	"github.com/alexandrmotologa/agentloop/internal/engine"
 	"github.com/alexandrmotologa/agentloop/internal/store"
 	"github.com/go-chi/chi/v5"
@@ -13,7 +14,7 @@ import (
 )
 
 // NewRouter constructs the Chi router with API routes, SSE, and embedded SPA file serving.
-func NewRouter(db *store.DB, executor *engine.Executor, webFS fs.FS) *chi.Mux {
+func NewRouter(db *store.DB, executor *engine.Executor, scheduler *cron.Scheduler, webFS fs.FS) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middleware.RequestID)
@@ -24,13 +25,16 @@ func NewRouter(db *store.DB, executor *engine.Executor, webFS fs.FS) *chi.Mux {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
-		ExposedHeaders:   []string{"Link"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Idempotency-Key", "X-Idempotency-Key", "X-Hub-Signature-256"},
+		ExposedHeaders:   []string{"Link", "Content-Disposition"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
 
-	apiHandler := NewAPI(db, executor)
+	apiHandler := NewAPI(db, executor, scheduler)
+
+	// Top-level webhook endpoint for standard webhook providers (e.g. /webhooks/invoice-flow)
+	r.Post("/webhooks/{id}", apiHandler.HandleWebhook)
 
 	// API Routes
 	r.Route("/api", func(r chi.Router) {
@@ -43,6 +47,9 @@ func NewRouter(db *store.DB, executor *engine.Executor, webFS fs.FS) *chi.Mux {
 		r.Delete("/workflows/{id}", apiHandler.HandleDeleteWorkflow)
 		r.Post("/workflows/{id}/run", apiHandler.HandleRunWorkflow)
 
+		// Webhooks
+		r.Post("/webhooks/{id}", apiHandler.HandleWebhook)
+
 		// Executions
 		r.Get("/executions", apiHandler.HandleListExecutions)
 		r.Get("/executions/{id}", apiHandler.HandleGetExecution)
@@ -50,6 +57,17 @@ func NewRouter(db *store.DB, executor *engine.Executor, webFS fs.FS) *chi.Mux {
 		r.Get("/executions/{id}/healing", apiHandler.HandleGetHealingLogs)
 		r.Get("/executions/{id}/snapshots", apiHandler.HandleGetSnapshots)
 		r.Post("/executions/{id}/rewind", apiHandler.HandleRewindExecution)
+
+		// Breakpoint & Step Debugger
+		r.Post("/executions/{id}/step", apiHandler.HandleStepExecution)
+		r.Post("/executions/{id}/continue", apiHandler.HandleContinueExecution)
+		r.Post("/executions/{id}/breakpoints", apiHandler.HandleSetBreakpoints)
+
+		// Compliance Audit Report
+		r.Get("/executions/{id}/report", apiHandler.HandleGetComplianceReport)
+
+		// Cron Scheduler
+		r.Get("/cron/jobs", apiHandler.HandleListCronJobs)
 
 		// Dead-Letter Queue
 		r.Get("/dlq", apiHandler.HandleListDLQItems)

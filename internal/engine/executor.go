@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/alexandrmotologa/agentloop/internal/healing"
@@ -30,6 +31,7 @@ type Executor struct {
 	DefaultLLM llm.Client
 	DLQ        DLQFreezer
 	Broker     *EventBroker
+	ChaosMode  bool
 }
 
 // NewExecutor creates a new workflow engine coordinator.
@@ -46,10 +48,11 @@ func NewExecutor(db *store.DB, dlq DLQFreezer) *Executor {
 		DefaultLLM: defaultLLM,
 		DLQ:        dlq,
 		Broker:     NewEventBroker(),
+		ChaosMode:  false,
 	}
 }
 
-// getLLMClient selects the appropriate provider client based on workflow model config.
+// getLLMClient selects the appropriate provider client based on workflow model config or explicit model name.
 func (e *Executor) getLLMClient(modelKey string, models map[string]ModelConfig) llm.Client {
 	if cfg, ok := models[modelKey]; ok {
 		switch cfg.Provider {
@@ -81,16 +84,26 @@ func (e *Executor) getLLMClient(modelKey string, models map[string]ModelConfig) 
 
 // Start creates and executes a workflow from a stored workflow specification.
 func (e *Executor) Start(ctx context.Context, workflowID string, initialInput map[string]any) (*Execution, error) {
+	return e.StartWithID(ctx, "", workflowID, initialInput)
+}
+
+// StartWithID creates and executes a workflow with an optional pre-allocated execution ID.
+func (e *Executor) StartWithID(ctx context.Context, customID string, workflowID string, initialInput map[string]any) (*Execution, error) {
 	spec, _, err := e.DB.GetWorkflow(workflowID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch workflow %s: %w", workflowID, err)
 	}
 
-	return e.StartSpec(ctx, spec, initialInput)
+	return e.StartSpecWithID(ctx, customID, spec, initialInput)
 }
 
 // StartSpec creates and executes a workflow from an in-memory WorkflowSpec.
 func (e *Executor) StartSpec(ctx context.Context, spec *WorkflowSpec, initialInput map[string]any) (*Execution, error) {
+	return e.StartSpecWithID(ctx, "", spec, initialInput)
+}
+
+// StartSpecWithID creates and executes a workflow with an optional explicit execution ID.
+func (e *Executor) StartSpecWithID(ctx context.Context, customID string, spec *WorkflowSpec, initialInput map[string]any) (*Execution, error) {
 	dag, err := BuildDAG(spec)
 	if err != nil {
 		return nil, fmt.Errorf("invalid workflow specification: %w", err)
@@ -101,7 +114,10 @@ func (e *Executor) StartSpec(ctx context.Context, spec *WorkflowSpec, initialInp
 		_ = e.DB.SaveWorkflow(spec, "")
 	}
 
-	execID := "exec_" + uuid.New().String()[:8]
+	execID := customID
+	if execID == "" {
+		execID = "exec_" + uuid.New().String()[:8]
+	}
 	state := NewState(spec.State, initialInput)
 
 	exec := &Execution{
@@ -111,8 +127,17 @@ func (e *Executor) StartSpec(ctx context.Context, spec *WorkflowSpec, initialInp
 		CurrentNodeID:   dag.Roots[0],
 		State:           state.ToMap(),
 		HealingAttempts: 0,
+		TotalTokens:     0,
+		TotalCostUSD:    0.0,
 		StartedAt:       time.Now(),
 		UpdatedAt:       time.Now(),
+	}
+
+	// Collect any predefined breakpoints from node specs
+	for _, n := range spec.Nodes {
+		if n.Breakpoint {
+			exec.Breakpoints = append(exec.Breakpoints, n.ID)
+		}
 	}
 
 	if err := e.DB.CreateExecution(exec); err != nil {
@@ -196,6 +221,56 @@ func (e *Executor) Resume(ctx context.Context, dlqID string, operatorInstruction
 	return e.runFromNode(ctx, dag, exec, state, startNodeID, operatorInstruction)
 }
 
+// Step advances a halted breakpoint execution by exactly one node.
+func (e *Executor) Step(ctx context.Context, executionID string) (*Execution, error) {
+	exec, err := e.DB.GetExecution(executionID)
+	if err != nil {
+		return nil, err
+	}
+
+	spec, _, err := e.DB.GetWorkflow(exec.WorkflowID)
+	if err != nil {
+		return nil, err
+	}
+
+	dag, err := BuildDAG(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	state := NewState(exec.State)
+	exec.Status = StatusRunning
+	exec.IsStepping = true
+	_ = e.DB.UpdateExecution(exec)
+
+	return e.runFromNode(ctx, dag, exec, state, exec.CurrentNodeID, "")
+}
+
+// Continue resumes a halted breakpoint execution until the next breakpoint or completion.
+func (e *Executor) Continue(ctx context.Context, executionID string) (*Execution, error) {
+	exec, err := e.DB.GetExecution(executionID)
+	if err != nil {
+		return nil, err
+	}
+
+	spec, _, err := e.DB.GetWorkflow(exec.WorkflowID)
+	if err != nil {
+		return nil, err
+	}
+
+	dag, err := BuildDAG(spec)
+	if err != nil {
+		return nil, err
+	}
+
+	state := NewState(exec.State)
+	exec.Status = StatusRunning
+	exec.IsStepping = false
+	_ = e.DB.UpdateExecution(exec)
+
+	return e.runFromNode(ctx, dag, exec, state, exec.CurrentNodeID, "")
+}
+
 // Rewind rolls back an execution's state to a previous node's snapshot and resumes execution.
 func (e *Executor) Rewind(ctx context.Context, executionID string, targetNodeID string) (*Execution, error) {
 	snapshots, err := e.DB.GetSnapshots(executionID)
@@ -222,7 +297,7 @@ func (e *Executor) Rewind(ctx context.Context, executionID string, targetNodeID 
 
 	spec, _, err := e.DB.GetWorkflow(exec.WorkflowID)
 	if err != nil {
-		return nil, fmt.Errorf("workflow spec not found: %w", err)
+		return nil, fmt.Errorf("workflow spec not found for execution %s: %w", exec.WorkflowID, err)
 	}
 
 	dag, err := BuildDAG(spec)
@@ -271,6 +346,32 @@ func (e *Executor) runFromNode(
 		node, exists := dag.GetNode(currentNodeID)
 		if !exists {
 			return exec, fmt.Errorf("node not found in DAG: %s", currentNodeID)
+		}
+
+		// Check Breakpoint Sentinel
+		hasBreakpoint := node.Breakpoint
+		for _, bp := range exec.Breakpoints {
+			if bp == node.ID {
+				hasBreakpoint = true
+				break
+			}
+		}
+
+		if hasBreakpoint && !exec.IsStepping {
+			exec.Status = StatusBreakpoint
+			exec.CurrentNodeID = node.ID
+			exec.State = state.ToMap()
+			_ = e.DB.UpdateExecution(exec)
+
+			e.Broker.Publish(ExecutionEvent{
+				ExecutionID: exec.ID,
+				WorkflowID:  exec.WorkflowID,
+				Type:        EventBreakpointHit,
+				NodeID:      node.ID,
+				Status:      string(StatusBreakpoint),
+				Message:     fmt.Sprintf("Execution paused at breakpoint on node %s", node.ID),
+			})
+			return exec, nil
 		}
 
 		exec.CurrentNodeID = node.ID
@@ -339,6 +440,16 @@ func (e *Executor) runFromNode(
 
 		latencyMs := time.Since(startTime).Milliseconds()
 
+		// Record token and cost telemetry
+		if tokensConsumed > 0 {
+			exec.TotalTokens += tokensConsumed
+			modelName := "gpt-4o"
+			if cfg, ok := dag.Spec.Models["primary"]; ok && cfg.Model != "" {
+				modelName = cfg.Model
+			}
+			exec.TotalCostUSD += llm.EstimateCost(modelName, tokensConsumed)
+		}
+
 		// Record audit log
 		inputJSON, _ := json.Marshal(node.Input)
 		_ = e.DB.AppendAuditLog(&StepAuditEntry{
@@ -353,13 +464,39 @@ func (e *Executor) runFromNode(
 			Timestamp:      time.Now(),
 		})
 
+		// Check Cost & Token Budget Sentinel
+		if dag.Spec.Budget != nil {
+			budgetExceeded := false
+			var budgetReason string
+
+			if dag.Spec.Budget.MaxTotalTokens > 0 && exec.TotalTokens > dag.Spec.Budget.MaxTotalTokens {
+				budgetExceeded = true
+				budgetReason = fmt.Sprintf("Token budget exceeded: consumed %d tokens, limit is %d", exec.TotalTokens, dag.Spec.Budget.MaxTotalTokens)
+			} else if dag.Spec.Budget.MaxCostUSD > 0 && exec.TotalCostUSD > dag.Spec.Budget.MaxCostUSD {
+				budgetExceeded = true
+				budgetReason = fmt.Sprintf("Cost budget exceeded: estimated $%.4f, limit is $%.4f", exec.TotalCostUSD, dag.Spec.Budget.MaxCostUSD)
+			}
+
+			if budgetExceeded {
+				e.Broker.Publish(ExecutionEvent{
+					ExecutionID: exec.ID,
+					WorkflowID:  exec.WorkflowID,
+					Type:        EventBudgetExceeded,
+					NodeID:      node.ID,
+					Status:      string(StatusPausedDLQ),
+					Message:     budgetReason,
+				})
+				_, _ = e.DLQ.FreezeToDLQ(ctx, exec, node.ID, "Cost Budget Exceeded", budgetReason, dag.Spec.Notifications)
+				return exec, nil
+			}
+		}
+
 		// If execution was paused to DLQ, halt traversal immediately
 		if exec.Status == StatusPausedDLQ {
 			return exec, nil
 		}
 
 		if nodeErr != nil {
-
 			// Execution terminal failure
 			exec.Status = StatusFailed
 			now := time.Now()
@@ -385,6 +522,37 @@ func (e *Executor) runFromNode(
 			Status:      string(nodeStatus),
 			Message:     fmt.Sprintf("Node %s completed in %dms", node.ID, latencyMs),
 		})
+
+		// If in single-step debugger mode, halt at next node
+		if exec.IsStepping {
+			exec.IsStepping = false
+			exec.Status = StatusBreakpoint
+			exec.State = state.ToMap()
+
+			// Determine next node
+			targetNext := ""
+			if nextNodeID != "" {
+				targetNext = nextNodeID
+			} else if node.Next != "" {
+				targetNext = node.Next
+			} else if len(dag.Outgoing[node.ID]) > 0 {
+				targetNext = dag.Outgoing[node.ID][0]
+			}
+
+			if targetNext != "" {
+				exec.CurrentNodeID = targetNext
+				_ = e.DB.UpdateExecution(exec)
+				e.Broker.Publish(ExecutionEvent{
+					ExecutionID: exec.ID,
+					WorkflowID:  exec.WorkflowID,
+					Type:        EventBreakpointHit,
+					NodeID:      targetNext,
+					Status:      string(StatusBreakpoint),
+					Message:     fmt.Sprintf("Stepped to node: %s", targetNext),
+				})
+				return exec, nil
+			}
+		}
 
 		// Determine next node
 		if nextNodeID != "" {
@@ -446,6 +614,14 @@ func (e *Executor) executeLLMNode(
 	totalTokens := 0
 	var lastRawOutput string
 
+	// Fallback cascade list
+	var cascadeList []string
+	if len(node.FallbackModels) > 0 {
+		cascadeList = node.FallbackModels
+	} else if prim, ok := dag.Spec.Models["primary"]; ok && len(prim.FallbackModels) > 0 {
+		cascadeList = prim.FallbackModels
+	}
+
 	for {
 		attempt++
 		currentClient := client
@@ -459,6 +635,36 @@ func (e *Executor) executeLLMNode(
 			Temperature:  0.1,
 			OutputSchema: node.OutputSchema,
 		})
+
+		// Multi-Model Fallback Cascade check
+		if genErr != nil && len(cascadeList) > 0 {
+			errLower := strings.ToLower(genErr.Error())
+			if strings.Contains(errLower, "429") || strings.Contains(errLower, "rate limit") || strings.Contains(errLower, "503") || strings.Contains(errLower, "timeout") {
+				fallbackModel := cascadeList[0]
+				cascadeList = cascadeList[1:]
+
+				e.Broker.Publish(ExecutionEvent{
+					ExecutionID: exec.ID,
+					WorkflowID:  exec.WorkflowID,
+					Type:        EventModelCascaded,
+					NodeID:      node.ID,
+					Message:     fmt.Sprintf("Cascading to fallback model '%s' due to: %s", fallbackModel, genErr.Error()),
+				})
+
+				fallbackClient := e.getLLMClient(fallbackModel, dag.Spec.Models)
+				genResp, genErr = fallbackClient.Generate(ctx, llm.GenerateRequest{
+					Model:        fallbackModel,
+					Prompt:       currentPrompt,
+					Temperature:  0.1,
+					OutputSchema: node.OutputSchema,
+				})
+			}
+		}
+
+		// Chaos mode simulation
+		if e.ChaosMode && attempt == 1 && (genErr == nil) {
+			genErr = fmt.Errorf("simulated chaos transient 502 Bad Gateway")
+		}
 
 		if genResp != nil {
 			totalTokens += genResp.TokensConsumed

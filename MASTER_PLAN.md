@@ -433,48 +433,58 @@ CREATE TABLE IF NOT EXISTS healing_logs (
 
 ### Phase 1: Core Engine & State Machine
 - [x] Repository initialization, Go module setup, and dependency selection.
-- [ ] Implement declarative workflow specification types and YAML parser (`internal/engine/types.go`, `dag.go`).
-- [ ] Implement DAG cycle detector and topological validator.
-- [ ] Implement atomic JSON state manager with snapshot support (`internal/engine/state.go`).
-- [ ] Implement safe expression evaluator and template interpolator (`internal/engine/expr.go`).
-- [ ] Implement SQLite persistence layer with WAL mode and schema migrations (`internal/store/`).
-- [ ] Implement execution coordinator and node runner (`internal/engine/executor.go`).
+- [x] Implement declarative workflow specification types and YAML parser (`internal/engine/types.go`, `dag.go`).
+- [x] Implement DAG cycle detector and topological validator.
+- [x] Implement atomic JSON state manager with snapshot support (`internal/engine/state.go`).
+- [x] Implement safe expression evaluator and template interpolator (`internal/engine/expr.go`).
+- [x] Implement SQLite persistence layer with WAL mode and schema migrations (`internal/store/`).
+- [x] Implement execution coordinator and node runner (`internal/engine/executor.go`).
 
 ### Phase 2: Multi-Provider LLM & Tool Ecosystem
-- [ ] Implement unified LLM client interface (`internal/llm/client.go`).
-- [ ] Implement OpenAI and Anthropic provider adapters with structured outputs (`internal/llm/openai.go`, `anthropic.go`).
-- [ ] Implement Ollama and local model provider adapter (`internal/llm/ollama.go`).
-- [ ] Implement deterministic mock LLM provider for zero-cost automated tests (`internal/llm/mock.go`).
-- [ ] Implement JSON Schema validator and sanitization engine (`internal/llm/structured.go`).
-- [ ] Implement logprob and semantic confidence scoring sentinel (`internal/llm/confidence.go`).
-- [ ] Implement built-in tools: HTTP REST, SQLite queries, JSON transforms, file I/O (`internal/tools/`).
+- [x] Implement unified LLM client interface (`internal/llm/client.go`).
+- [x] Implement OpenAI and Anthropic provider adapters with structured outputs (`internal/llm/openai.go`, `anthropic.go`).
+- [x] Implement Ollama and local model provider adapter (`internal/llm/ollama.go`).
+- [x] Implement deterministic mock LLM provider for zero-cost automated tests (`internal/llm/mock.go`).
+- [x] Implement JSON Schema validator and sanitization engine (`internal/llm/structured.go`).
+- [x] Implement logprob and semantic confidence scoring sentinel (`internal/llm/confidence.go`).
+- [x] Implement built-in tools: HTTP REST, SQLite queries, JSON transforms, file I/O (`internal/tools/`).
 
 ### Phase 3: Autonomous Self-Healing Subsystem & DLQ
-- [ ] Implement error categorizer (`internal/healing/classifier.go`).
-- [ ] Implement surgical prompt mutation engine (`internal/healing/repair_prompt.go`).
-- [ ] Implement tool fallback router (`internal/healing/fallback_router.go`).
-- [ ] Implement Dead-Letter Queue engine and state freezing (`internal/dlq/queue.go`, `snapshot.go`).
-- [ ] Implement alert dispatcher for Webhooks, Slack, and console alerts (`internal/dlq/dispatcher.go`).
-- [ ] Implement HITL resume, retry, state patch, and abort handlers (`internal/dlq/`).
+- [x] Implement error categorizer (`internal/healing/classifier.go`).
+- [x] Implement surgical prompt mutation engine (`internal/healing/repair_prompt.go`).
+- [x] Implement tool fallback router (`internal/healing/fallback_router.go`).
+- [x] Implement Dead-Letter Queue engine and state freezing (`internal/dlq/queue.go`, `snapshot.go`).
+- [x] Implement alert dispatcher for Webhooks, Slack, and console alerts (`internal/dlq/dispatcher.go`).
+- [x] Implement HITL resume, retry, state patch, and abort handlers (`internal/dlq/`).
 
 ### Phase 4: REST API, Server-Sent Events (SSE) & CLI
-- [ ] Implement Chi HTTP REST router and handlers for workflows, executions, DLQ, and audit logs (`internal/api/`).
-- [ ] Implement real-time SSE broker for streaming execution events to the web console (`internal/api/sse.go`).
-- [ ] Implement complete CLI with commands: `run`, `serve`, `dlq list`, `dlq inspect`, `resume`, `validate`, `version` (`cmd/agentloop/main.go`).
+- [x] Implement Chi HTTP REST router and handlers for workflows, executions, DLQ, and audit logs (`internal/api/`).
+- [x] Implement real-time SSE broker for streaming execution events to the web console (`internal/api/sse.go`).
+- [x] Implement complete CLI with commands: `run`, `serve`, `dlq list`, `dlq inspect`, `resume`, `validate`, `report`, `version` (`cmd/agentloop/main.go`).
 
 ### Phase 5: Embedded React 19 HITL Cockpit
-- [ ] Initialize React 19 + TypeScript + Vite + Tailwind CSS project in `web/`.
-- [ ] Implement API client with REST and SSE event stream subscription (`web/src/api/client.ts`).
-- [ ] Build interactive Workflow DAG Visualizer with node statuses and execution path highlights.
-- [ ] Build Dead-Letter Queue Inbox and incident inspection view.
-- [ ] Build interactive JSON State Editor with patch validation.
-- [ ] Build Execution Replay and Step Audit Log timeline.
-- [ ] Build Self-Healing Attempt Diff Viewer.
-- [ ] Build production assets into `web/dist` and embed into Go binary via `//go:embed`.
+- [x] Initialize React 19 + TypeScript + Vite + Tailwind CSS project in `web/`.
+- [x] Implement API client with REST and SSE event stream subscription (`web/src/api/client.ts`).
+- [x] Build interactive Workflow DAG Visualizer with node statuses and execution path highlights.
+- [x] Build Dead-Letter Queue Inbox and incident inspection view.
+- [x] Build interactive JSON State Editor with patch validation.
+- [x] Build Execution Replay and Step Audit Log timeline.
+- [x] Build Self-Healing Attempt Diff Viewer.
+- [x] Build production assets into `web/dist` and embed into Go binary via `//go:embed`.
 
 ### Phase 6: Examples, Comprehensive Testing & Documentation
-- [ ] Create realistic workflow examples: `invoice_reconciliation.yaml`, `incident_remediation.yaml`, `customer_kyc.yaml`.
-- [ ] Write unit and integration tests for engine, self-healing, DLQ, and API.
-- [ ] Benchmark execution overhead to verify sub-25ms node transition target.
-- [ ] Author documentation in `docs/` and root `README.md` using humanizer principles.
-- [ ] Push to GitHub repository.
+- [x] Create realistic workflow examples: `invoice_reconciliation.yaml`, `incident_remediation.yaml`, `customer_kyc.yaml`.
+- [x] Write unit and integration tests for engine, self-healing, DLQ, and API.
+- [x] Benchmark execution overhead to verify sub-25ms node transition target (measured at ~0.37ms - 1.1ms).
+- [x] Author documentation in `docs/` and root `README.md` using humanizer principles.
+- [x] Push to GitHub repository.
+
+### Phase 7: Advanced Usability & Enterprise Enhancements
+- [x] Token & Cost Budget Sentinel (`internal/llm/pricing.go`, `internal/engine/executor.go`): Enforces total token and dollar limits per execution with automatic DLQ pause.
+- [x] Multi-Model Fallback Cascades: Automatic failover from primary model to fallback list on network or provider errors.
+- [x] Webhook Ingestion Gateway (`internal/api/webhook.go`): Secure external trigger ingestion with HMAC-SHA256 signature verification and idempotency keys.
+- [x] Lightweight Cron Engine (`internal/cron/cron.go`): Built-in periodic scheduler supporting standard cron syntax, `@hourly`, `@daily`.
+- [x] Breakpoint & Step-Through Debugger: Single-step forward (`Step`), run to next breakpoint or finish (`Continue`), interactive breakpoint toggling on DAG nodes.
+- [x] Side-by-Side Visual State Diff (`web/src/components/StateDiffView.tsx`): Side-by-side colorized state comparison highlighting added, modified, and removed variables in DLQ.
+- [x] Compliance Audit Report Exporter (`internal/report/report.go`): Generation of professional GitHub Markdown and JSON audit reports via CLI (`agentloop report`) and API (`/api/executions/{id}/report`).
+- [x] Chaos Mode / Resilience Simulator: Built-in fault injector for verifying self-healing loops without production risk.

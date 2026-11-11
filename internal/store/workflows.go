@@ -13,6 +13,7 @@ type WorkflowSummary struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	NodeCount int       `json:"node_count"`
+	Schedule  string    `json:"schedule,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -77,6 +78,7 @@ func (db *DB) ListWorkflows() ([]WorkflowSummary, error) {
 		var spec types.WorkflowSpec
 		if err := yaml.Unmarshal([]byte(rawYAML), &spec); err == nil {
 			s.NodeCount = len(spec.Nodes)
+			s.Schedule = spec.Workflow.Schedule
 		}
 		list = append(list, s)
 	}

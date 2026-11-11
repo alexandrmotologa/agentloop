@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { DLQItem, Execution } from '../types';
 import { api } from '../api/client';
 import { StateEditor } from '../components/StateEditor';
-import { ArrowLeft, Play, RefreshCw, XOctagon, AlertOctagon, CheckCircle2, ShieldAlert, Sparkles, MessageSquare } from 'lucide-react';
+import { StateDiffView } from '../components/StateDiffView';
+import { ArrowLeft, Play, RefreshCw, XOctagon, AlertOctagon, CheckCircle2, ShieldAlert, Sparkles, MessageSquare, SplitSquareVertical } from 'lucide-react';
 
 interface DLQDetailProps {
   dlqId: string;
@@ -13,7 +14,9 @@ interface DLQDetailProps {
 export const DLQDetail: React.FC<DLQDetailProps> = ({ dlqId, onBack, onResolved }) => {
   const [item, setItem] = useState<DLQItem | null>(null);
   const [execution, setExecution] = useState<Execution | null>(null);
+  const [initialState, setInitialState] = useState<Record<string, any>>({});
   const [frozenState, setFrozenState] = useState<Record<string, any>>({});
+  const [activeTab, setActiveTab] = useState<'editor' | 'diff'>('editor');
   const [patch, setPatch] = useState<Record<string, any>>({});
   const [instruction, setInstruction] = useState('');
   const [loading, setLoading] = useState(true);
@@ -38,6 +41,19 @@ export const DLQDetail: React.FC<DLQDetailProps> = ({ dlqId, onBack, onResolved 
 
       const execData = await api.getExecution(data.execution_id);
       setExecution(execData);
+
+      // Load initial state from first snapshot for diff comparison
+      try {
+        const snaps = await api.getSnapshots(data.execution_id);
+        if (snaps && snaps.length > 0) {
+          const env = JSON.parse(snaps[0].state_json);
+          setInitialState(env.state || env);
+        } else if (execData) {
+          setInitialState(execData.state || {});
+        }
+      } catch {
+        // Fallback
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to load DLQ item');
     } finally {
@@ -153,20 +169,59 @@ export const DLQDetail: React.FC<DLQDetailProps> = ({ dlqId, onBack, onResolved 
 
       {/* Main Grid: State Inspector & Operator Action Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column: Frozen State Editor */}
+        {/* Left Column: Frozen State Editor / Visual Diff */}
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-cyan-400" />
-            Frozen Execution Snapshot & Patching
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-cyan-400" />
+              State Inspection & Patching
+            </h3>
+
+            <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-0.5 text-xs">
+              <button
+                onClick={() => setActiveTab('editor')}
+                className={`px-3 py-1 rounded-md transition-colors ${
+                  activeTab === 'editor'
+                    ? 'bg-slate-800 text-cyan-300 font-medium'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Patch Editor
+              </button>
+              <button
+                onClick={() => setActiveTab('diff')}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-colors ${
+                  activeTab === 'diff'
+                    ? 'bg-slate-800 text-cyan-300 font-medium'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <SplitSquareVertical className="w-3.5 h-3.5" />
+                Visual Diff
+              </button>
+            </div>
+          </div>
+
           <p className="text-xs text-slate-400">
-            Inspect the exact memory state at failure. Edits made below will be merged before resumption.
+            {activeTab === 'editor'
+              ? 'Inspect and edit the exact memory state at failure. Edits made below will be merged before resumption.'
+              : 'Compare initial baseline state against the frozen state at failure to identify mutated variables.'}
           </p>
-          <StateEditor
-            initialState={frozenState}
-            onSave={(updated) => setPatch(updated)}
-            readOnly={isResolved}
-          />
+
+          {activeTab === 'editor' ? (
+            <StateEditor
+              initialState={frozenState}
+              onSave={(updated) => setPatch(updated)}
+              readOnly={isResolved}
+            />
+          ) : (
+            <StateDiffView
+              beforeState={initialState}
+              afterState={frozenState}
+              beforeTitle="Initial State"
+              afterTitle={`Frozen Snapshot (${item.failed_node_id})`}
+            />
+          )}
         </div>
 
         {/* Right Column: Operator Steering & Actions */}

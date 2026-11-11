@@ -14,7 +14,9 @@ import (
 	"github.com/alexandrmotologa/agentloop/internal/api"
 	"github.com/alexandrmotologa/agentloop/internal/dlq"
 	"github.com/alexandrmotologa/agentloop/internal/engine"
+	"github.com/alexandrmotologa/agentloop/internal/report"
 	"github.com/alexandrmotologa/agentloop/internal/store"
+	"github.com/alexandrmotologa/agentloop/internal/types"
 	"github.com/alexandrmotologa/agentloop/web"
 )
 
@@ -39,6 +41,8 @@ func main() {
 		cmdResume(os.Args[2:])
 	case "validate":
 		cmdValidate(os.Args[2:])
+	case "report":
+		cmdReport(os.Args[2:])
 	case "version", "--version", "-v":
 		fmt.Printf("agentloop version %s (Go runtime %s)\n", version, "1.24")
 	case "help", "--help", "-h":
@@ -62,6 +66,7 @@ Commands:
   dlq         Inspect or list Dead-Letter Queue items
   resume      Resume a paused DLQ execution with optional operator guidance
   validate    Validate a workflow YAML file without executing it
+  report      Generate an execution compliance and audit report (Markdown/JSON)
   version     Show version information
   help        Show this help message
 
@@ -362,4 +367,64 @@ func cmdValidate(args []string) {
 		fmt.Printf("  %d. %-24s [%s]\n", i+1, node.ID, node.Type)
 	}
 	fmt.Println()
+}
+
+func cmdReport(args []string) {
+	fs := flag.NewFlagSet("report", flag.ExitOnError)
+	execID := fs.String("id", "", "Execution ID to audit (required)")
+	format := fs.String("format", "markdown", "Report format: markdown or json")
+	outFile := fs.String("out", "", "Output file path (prints to stdout if omitted)")
+	dbPath := fs.String("db", "./agentloop.db", "SQLite database file path")
+	_ = fs.Parse(args)
+
+	if *execID == "" {
+		fmt.Fprintln(os.Stderr, "Error: --id argument is required")
+		os.Exit(1)
+	}
+
+	db, err := store.OpenDB(*dbPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening database: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
+
+	exec, err := db.GetExecution(*execID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error fetching execution: %v\n", err)
+		os.Exit(1)
+	}
+
+	var wfSpec *types.WorkflowSpec
+	spec, _, err := db.GetWorkflow(exec.WorkflowID)
+	if err == nil {
+		wfSpec = spec
+	}
+
+	auditLogs, _ := db.GetAuditLogs(*execID)
+	healingLogs, _ := db.GetHealingLogs(*execID)
+	dlqItem, _ := db.GetDLQItemByExecutionID(*execID)
+
+	compReport := report.BuildComplianceReport(exec, wfSpec, auditLogs, healingLogs, dlqItem)
+
+	var output []byte
+	if *format == "json" {
+		output, err = report.GenerateJSONReport(compReport)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error generating JSON report: %v\n", err)
+			os.Exit(1)
+		}
+	} else {
+		output = []byte(report.GenerateMarkdownReport(compReport))
+	}
+
+	if *outFile != "" {
+		if err := os.WriteFile(*outFile, output, 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing report to %s: %v\n", *outFile, err)
+			os.Exit(1)
+		}
+		fmt.Printf("✓ Compliance audit report saved to %s\n", *outFile)
+	} else {
+		fmt.Println(string(output))
+	}
 }

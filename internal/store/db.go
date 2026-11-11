@@ -62,6 +62,8 @@ func (db *DB) migrate() error {
 		current_node_id TEXT,
 		state_json TEXT NOT NULL,
 		healing_attempts INTEGER DEFAULT 0,
+		total_tokens INTEGER DEFAULT 0,
+		total_cost_usd REAL DEFAULT 0.0,
 		started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 		completed_at TIMESTAMP
@@ -115,6 +117,13 @@ func (db *DB) migrate() error {
 		timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 
+	CREATE TABLE IF NOT EXISTS idempotency_keys (
+		key TEXT PRIMARY KEY,
+		workflow_id TEXT NOT NULL,
+		execution_id TEXT NOT NULL,
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	);
+
 	CREATE INDEX IF NOT EXISTS idx_executions_workflow ON executions(workflow_id);
 	CREATE INDEX IF NOT EXISTS idx_executions_status ON executions(status);
 	CREATE INDEX IF NOT EXISTS idx_dlq_execution ON dlq_items(execution_id);
@@ -122,6 +131,13 @@ func (db *DB) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_healing_execution ON healing_logs(execution_id);
 	`
 
-	_, err := db.Exec(schema)
-	return err
+	if _, err := db.Exec(schema); err != nil {
+		return err
+	}
+
+	// Dynamic column migrations if table already existed without new columns
+	_, _ = db.Exec("ALTER TABLE executions ADD COLUMN total_tokens INTEGER DEFAULT 0;")
+	_, _ = db.Exec("ALTER TABLE executions ADD COLUMN total_cost_usd REAL DEFAULT 0.0;")
+
+	return nil
 }

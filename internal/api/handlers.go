@@ -2,25 +2,32 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
+	"github.com/alexandrmotologa/agentloop/internal/cron"
 	"github.com/alexandrmotologa/agentloop/internal/engine"
+	"github.com/alexandrmotologa/agentloop/internal/report"
 	"github.com/alexandrmotologa/agentloop/internal/store"
+	"github.com/alexandrmotologa/agentloop/internal/types"
 	"github.com/go-chi/chi/v5"
 )
 
 type API struct {
-	db       *store.DB
-	executor *engine.Executor
+	db        *store.DB
+	executor  *engine.Executor
+	scheduler *cron.Scheduler
 }
 
-func NewAPI(db *store.DB, executor *engine.Executor) *API {
+func NewAPI(db *store.DB, executor *engine.Executor, scheduler *cron.Scheduler) *API {
 	return &API{
-		db:       db,
-		executor: executor,
+		db:        db,
+		executor:  executor,
+		scheduler: scheduler,
 	}
 }
 
@@ -86,6 +93,10 @@ func (a *API) HandleCreateWorkflow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if a.scheduler != nil {
+		_ = a.scheduler.Reload()
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"message":  "workflow created",
 		"id":       dag.Spec.Workflow.ID,
@@ -99,6 +110,9 @@ func (a *API) HandleDeleteWorkflow(w http.ResponseWriter, r *http.Request) {
 	if err := a.db.DeleteWorkflow(id); err != nil {
 		writeError(w, http.StatusNotFound, err.Error())
 		return
+	}
+	if a.scheduler != nil {
+		_ = a.scheduler.Reload()
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "workflow deleted"})
 }
@@ -280,3 +294,96 @@ func (a *API) HandleAbortDLQItem(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "execution aborted"})
 }
+
+// StepExecution advances an execution paused at a breakpoint by exactly one step.
+func (a *API) HandleStepExecution(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	exec, err := a.executor.Step(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, exec)
+}
+
+// ContinueExecution resumes execution from a breakpoint until the next breakpoint or completion.
+func (a *API) HandleContinueExecution(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	exec, err := a.executor.Continue(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, exec)
+}
+
+// SetBreakpoints configures the active breakpoints on an execution.
+func (a *API) HandleSetBreakpoints(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req struct {
+		Breakpoints []string `json:"breakpoints"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	exec, err := a.db.GetExecution(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "execution not found")
+		return
+	}
+
+	exec.Breakpoints = req.Breakpoints
+	if err := a.db.UpdateExecution(exec); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, exec)
+}
+
+// GetComplianceReport generates a comprehensive audit and compliance report.
+func (a *API) HandleGetComplianceReport(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	exec, err := a.db.GetExecution(id)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "execution not found")
+		return
+	}
+
+	var wfSpec *types.WorkflowSpec
+	spec, _, err := a.db.GetWorkflow(exec.WorkflowID)
+	if err == nil {
+		wfSpec = spec
+	}
+
+	auditLogs, _ := a.db.GetAuditLogs(id)
+	healingLogs, _ := a.db.GetHealingLogs(id)
+	dlqItem, _ := a.db.GetDLQItemByExecutionID(id)
+
+	complianceRep := report.BuildComplianceReport(exec, wfSpec, auditLogs, healingLogs, dlqItem)
+
+	format := r.URL.Query().Get("format")
+	if format == "json" || (strings.Contains(r.Header.Get("Accept"), "application/json") && format != "markdown") {
+		writeJSON(w, http.StatusOK, complianceRep)
+		return
+	}
+
+	md := report.GenerateMarkdownReport(complianceRep)
+	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"compliance_report_%s.md\"", id))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(md))
+}
+
+// ListCronJobs returns all actively scheduled recurring workflows.
+func (a *API) HandleListCronJobs(w http.ResponseWriter, r *http.Request) {
+	if a.scheduler == nil {
+		writeJSON(w, http.StatusOK, []any{})
+		return
+	}
+	jobs := a.scheduler.ListJobs()
+	writeJSON(w, http.StatusOK, jobs)
+}
+

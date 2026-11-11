@@ -11,6 +11,7 @@ type (
 	NodeType           = types.NodeType
 	WorkflowSpec       = types.WorkflowSpec
 	WorkflowMetadata   = types.WorkflowMetadata
+	BudgetConfig       = types.BudgetConfig
 	ModelConfig        = types.ModelConfig
 	NodeSpec           = types.NodeSpec
 	LowConfidenceRule  = types.LowConfidenceRule
@@ -28,11 +29,12 @@ type (
 )
 
 const (
-	StatusPending   = types.StatusPending
-	StatusRunning   = types.StatusRunning
-	StatusCompleted = types.StatusCompleted
-	StatusFailed    = types.StatusFailed
-	StatusPausedDLQ = types.StatusPausedDLQ
+	StatusPending    = types.StatusPending
+	StatusRunning    = types.StatusRunning
+	StatusCompleted  = types.StatusCompleted
+	StatusFailed     = types.StatusFailed
+	StatusPausedDLQ  = types.StatusPausedDLQ
+	StatusBreakpoint = types.StatusBreakpoint
 
 	NodeStatusPending = types.NodeStatusPending
 	NodeStatusRunning = types.NodeStatusRunning
@@ -40,6 +42,7 @@ const (
 	NodeStatusHealed  = types.NodeStatusHealed
 	NodeStatusFailed  = types.NodeStatusFailed
 	NodeStatusPaused  = types.NodeStatusPaused
+	NodeStatusHalted  = types.NodeStatusHalted
 
 	NodeTypeLLMAgent          = types.NodeTypeLLMAgent
 	NodeTypeToolExecution     = types.NodeTypeToolExecution

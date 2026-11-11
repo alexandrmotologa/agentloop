@@ -1,4 +1,4 @@
-import { Execution, DLQItem, StepAuditEntry, HealingLogEntry, StateSnapshot, WorkflowSummary, WorkflowSpec } from '../types';
+import { Execution, DLQItem, StepAuditEntry, HealingLogEntry, StateSnapshot, WorkflowSummary, WorkflowSpec, ScheduledJob, ComplianceReport } from '../types';
 
 const BASE_URL = '/api';
 
@@ -77,6 +77,63 @@ export const api = {
     return res.json();
   },
 
+  // Step-Through Debugger & Breakpoints
+  stepExecution: async (executionId: string): Promise<Execution> => {
+    const res = await fetch(`${BASE_URL}/executions/${executionId}/step`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to step execution');
+    }
+    return res.json();
+  },
+
+  continueExecution: async (executionId: string): Promise<Execution> => {
+    const res = await fetch(`${BASE_URL}/executions/${executionId}/continue`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to continue execution');
+    }
+    return res.json();
+  },
+
+  setBreakpoints: async (executionId: string, breakpoints: string[]): Promise<Execution> => {
+    const res = await fetch(`${BASE_URL}/executions/${executionId}/breakpoints`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ breakpoints }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || 'Failed to set breakpoints');
+    }
+    return res.json();
+  },
+
+  // Compliance Audit Report
+  getComplianceReport: async (executionId: string, format: 'json' | 'markdown' = 'json'): Promise<any> => {
+    const res = await fetch(`${BASE_URL}/executions/${executionId}/report?format=${format}`, {
+      headers: {
+        Accept: format === 'markdown' ? 'text/markdown' : 'application/json',
+      },
+    });
+    if (!res.ok) throw new Error('Failed to fetch compliance report');
+    if (format === 'markdown') {
+      return res.text();
+    }
+    return res.json() as Promise<ComplianceReport>;
+  },
+
+  // Cron Scheduler
+  listCronJobs: async (): Promise<ScheduledJob[]> => {
+    const res = await fetch(`${BASE_URL}/cron/jobs`);
+    if (!res.ok) return [];
+    return res.json();
+  },
+
   // Dead-Letter Queue
   listDLQItems: async (status?: string): Promise<DLQItem[]> => {
     const params = new URLSearchParams();
@@ -142,6 +199,9 @@ export function subscribeToEvents(
     'execution_resumed',
     'workflow_completed',
     'workflow_failed',
+    'breakpoint_hit',
+    'budget_exceeded',
+    'model_cascaded',
   ];
 
   eventTypes.forEach((type) => {

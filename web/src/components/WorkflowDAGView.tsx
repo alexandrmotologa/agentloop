@@ -1,12 +1,28 @@
 import React, { useState } from 'react';
 import { NodeSpec, Execution, StepAuditEntry, NodeType } from '../types';
-import { Bot, Wrench, GitFork, UserCheck, Code2, ArrowDown, CheckCircle2, AlertTriangle, XCircle, Clock, PlayCircle, RotateCcw } from 'lucide-react';
+import {
+  Bot,
+  Wrench,
+  GitFork,
+  UserCheck,
+  Code2,
+  ArrowDown,
+  CheckCircle2,
+  AlertTriangle,
+  XCircle,
+  Clock,
+  PlayCircle,
+  RotateCcw,
+  CircleDot,
+  PauseCircle,
+} from 'lucide-react';
 
 interface WorkflowDAGViewProps {
   nodes: NodeSpec[];
   execution?: Execution | null;
   auditLogs?: StepAuditEntry[];
   onRewind?: (nodeId: string) => void;
+  onToggleBreakpoint?: (nodeId: string) => void;
 }
 
 export const WorkflowDAGView: React.FC<WorkflowDAGViewProps> = ({
@@ -14,6 +30,7 @@ export const WorkflowDAGView: React.FC<WorkflowDAGViewProps> = ({
   execution,
   auditLogs = [],
   onRewind,
+  onToggleBreakpoint,
 }) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
@@ -48,12 +65,18 @@ export const WorkflowDAGView: React.FC<WorkflowDAGViewProps> = ({
     }
 
     if (execution.current_node_id === nodeId) {
+      if (execution.status === 'HALTED_BREAKPOINT') return 'BREAKPOINT';
       if (execution.status === 'PAUSED_DLQ') return 'PAUSED';
       if (execution.status === 'RUNNING') return 'RUNNING';
       if (execution.status === 'FAILED') return 'FAILED';
     }
 
     return 'PENDING';
+  };
+
+  const isBreakpointSet = (node: NodeSpec) => {
+    if (execution?.breakpoints?.includes(node.id)) return true;
+    return !!node.breakpoint;
   };
 
   const selectedNode = nodes.find((n) => n.id === selectedNodeId);
@@ -63,17 +86,17 @@ export const WorkflowDAGView: React.FC<WorkflowDAGViewProps> = ({
     <div className="flex flex-col lg:flex-row gap-6">
       {/* DAG Flow Visualizer */}
       <div className="flex-1 bg-slate-900/60 border border-slate-800 rounded-xl p-6 relative overflow-hidden">
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800/80">
+        <div className="flex flex-wrap items-center justify-between mb-6 pb-4 border-b border-slate-800/80 gap-3">
           <div>
             <h3 className="font-semibold text-slate-100 flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block animate-pulse"></span>
               Execution Directed Acyclic Graph (DAG)
             </h3>
             <p className="text-xs text-slate-400 mt-0.5">
-              Deterministic sequence with autonomous sentinels and fallback checkpoints
+              Deterministic sequence with autonomous sentinels, breakpoints, and fallback checkpoints
             </p>
           </div>
-          <div className="text-xs text-slate-400 flex items-center gap-4">
+          <div className="text-xs text-slate-400 flex flex-wrap items-center gap-3">
             <span className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Success
             </span>
@@ -81,7 +104,7 @@ export const WorkflowDAGView: React.FC<WorkflowDAGViewProps> = ({
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span> Running
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-amber-400"></span> DLQ Frozen
+              <span className="w-2 h-2 rounded-full bg-amber-400"></span> Breakpoint / DLQ
             </span>
           </div>
         </div>
@@ -92,6 +115,7 @@ export const WorkflowDAGView: React.FC<WorkflowDAGViewProps> = ({
             const state = getNodeState(node.id);
             const audit = getNodeAudit(node.id);
             const isSelected = selectedNodeId === node.id;
+            const hasBreakpoint = isBreakpointSet(node);
 
             return (
               <React.Fragment key={node.id}>
@@ -114,6 +138,12 @@ export const WorkflowDAGView: React.FC<WorkflowDAGViewProps> = ({
                           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700/50">
                             {node.type}
                           </span>
+                          {hasBreakpoint && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800/50">
+                              <CircleDot className="w-2.5 h-2.5 text-amber-400" />
+                              Breakpoint
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-slate-400 mt-1 line-clamp-1">{node.description || 'Execution node'}</p>
                       </div>
@@ -139,6 +169,12 @@ export const WorkflowDAGView: React.FC<WorkflowDAGViewProps> = ({
                           Running
                         </span>
                       )}
+                      {state === 'BREAKPOINT' && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse">
+                          <PauseCircle className="w-3.5 h-3.5" />
+                          Paused at Breakpoint
+                        </span>
+                      )}
                       {state === 'PAUSED' && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30 animate-pulse">
                           <AlertTriangle className="w-3.5 h-3.5" />
@@ -159,14 +195,6 @@ export const WorkflowDAGView: React.FC<WorkflowDAGViewProps> = ({
                       )}
                     </div>
                   </div>
-
-                  {/* Node Metrics Footer */}
-                  {audit && (
-                    <div className="mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400 font-mono">
-                      <span>Latency: {audit.latency_ms}ms</span>
-                      {audit.tokens_consumed > 0 && <span>Tokens: {audit.tokens_consumed}</span>}
-                    </div>
-                  )}
                 </div>
 
                 {/* Arrow Connector */}
@@ -192,16 +220,32 @@ export const WorkflowDAGView: React.FC<WorkflowDAGViewProps> = ({
               </h4>
               <span className="text-xs text-slate-400">{selectedNode.type}</span>
             </div>
-            {onRewind && execution && (
-              <button
-                onClick={() => onRewind(selectedNode.id)}
-                title="Rewind execution state to this node snapshot"
-                className="px-2.5 py-1 text-xs font-medium rounded-md bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 flex items-center gap-1.5 transition-colors"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Rewind
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {onToggleBreakpoint && (
+                <button
+                  onClick={() => onToggleBreakpoint(selectedNode.id)}
+                  title="Toggle debug breakpoint on this node"
+                  className={`px-2.5 py-1 text-xs font-medium rounded-md border flex items-center gap-1.5 transition-colors ${
+                    isBreakpointSet(selectedNode)
+                      ? 'bg-amber-950 text-amber-300 border-amber-700/60'
+                      : 'bg-slate-800 hover:bg-slate-700 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  <CircleDot className="w-3 h-3 text-amber-400" />
+                  {isBreakpointSet(selectedNode) ? 'Breakpoint Active' : 'Set Breakpoint'}
+                </button>
+              )}
+              {onRewind && execution && (
+                <button
+                  onClick={() => onRewind(selectedNode.id)}
+                  title="Rewind execution state to this node snapshot"
+                  className="px-2.5 py-1 text-xs font-medium rounded-md bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 flex items-center gap-1.5 transition-colors"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  Rewind
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="text-xs space-y-3 overflow-y-auto max-h-[500px]">
