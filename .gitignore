@@ -1,0 +1,27 @@
+# Binaries
+bin/
+/agentloop
+/agentloop.exe
+*.exe
+
+# Database files
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# Dependencies
+node_modules/
+vendor/
+
+# Test and coverage
+coverage.out
+*.test
+
+# Environment files
+.env
+.env.local
+
+# OS files
+.DS_Store
+Thumbs.db

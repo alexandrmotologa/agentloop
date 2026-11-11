@@ -1,0 +1,68 @@
+version: "1"
+workflow:
+  id: "cloud-incident-remediation"
+  name: "Autonomous Cloud Incident Triage & Remediation"
+  timeout: "10m"
+  max_healing_attempts: 3
+
+models:
+  primary:
+    provider: "openai"
+    model: "gpt-4o"
+    temperature: 0.1
+  healing:
+    provider: "openai"
+    model: "gpt-4o-mini"
+    temperature: 0.0
+
+state:
+  incident_id: "INC-88912"
+  service: "checkout-api"
+  error_rate: 0.14
+  severity: "SEV-1"
+  remediation_action: ""
+  audit_status: "PENDING"
+
+nodes:
+  - id: "triage_alert"
+    type: "llm_agent"
+    description: "Analyze incident error rate and classify mitigation severity"
+    prompt: |
+      Analyze incident: {{ .state.incident_id }} on service {{ .state.service }} with error rate {{ .state.error_rate }}.
+      Classify incident severity, root cause hypothesis, and suggested mitigation action.
+    output_schema:
+      type: "object"
+      required: ["service", "severity", "root_cause", "recommended_action"]
+      properties:
+        service: { type: "string" }
+        severity: { type: "string" }
+        root_cause: { type: "string" }
+        recommended_action: { type: "string" }
+    save_to: "triage_result"
+
+  - id: "query_host_metrics"
+    type: "tool_execution"
+    tool: "sqlite_query"
+    params:
+      query: "SELECT id, vendor_tax_id, status FROM purchase_orders LIMIT 1"
+    save_to: "telemetry_data"
+
+  - id: "evaluate_risk"
+    type: "conditional_router"
+    conditions:
+      - condition: "state.severity == 'SEV-1' || state.error_rate > 0.10"
+        next: "pause_for_sre_approval"
+      - condition: "default"
+        next: "execute_auto_restart"
+
+  - id: "pause_for_sre_approval"
+    type: "human_checkpoint"
+    description: "High-impact SEV-1 gate requiring on-call SRE confirmation before applying failover"
+    save_to: "sre_approval"
+
+  - id: "execute_auto_restart"
+    type: "tool_execution"
+    tool: "json_transform"
+    params:
+      expr: "{ status: 'REMEDIATED', action: 'container_restart', applied_at: 'now' }"
+    save_to: "remediation_result"

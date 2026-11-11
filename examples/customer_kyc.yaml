@@ -1,0 +1,68 @@
+version: "1"
+workflow:
+  id: "customer-kyc-validation"
+  name: "Automated Customer KYC & AML Screening"
+  timeout: "5m"
+  max_healing_attempts: 3
+
+models:
+  primary:
+    provider: "openai"
+    model: "gpt-4o"
+    temperature: 0.1
+  healing:
+    provider: "openai"
+    model: "gpt-4o-mini"
+    temperature: 0.0
+
+state:
+  applicant_id: "KYC-9921"
+  full_name: "Elena Rostova"
+  country_code: "RO"
+  document_type: "PASSPORT"
+  risk_score: 0.0
+  compliance_status: "PENDING"
+
+nodes:
+  - id: "extract_identity"
+    type: "llm_agent"
+    description: "Extract customer name, DOB, and passport number"
+    prompt: |
+      Extract passport identity information for applicant {{ .state.applicant_id }}:
+      Full Name: Elena Rostova, Country: RO, Document: PASSPORT, Validity: VALID.
+    output_schema:
+      type: "object"
+      required: ["full_name", "country_code", "document_valid", "pep_flag"]
+      properties:
+        full_name: { type: "string" }
+        country_code: { type: "string" }
+        document_valid: { type: "boolean" }
+        pep_flag: { type: "boolean" }
+    save_to: "identity_record"
+
+  - id: "check_sanctions_registry"
+    type: "tool_execution"
+    tool: "sqlite_query"
+    params:
+      query: "SELECT id, status FROM purchase_orders LIMIT 1"
+    save_to: "sanctions_check"
+
+  - id: "compliance_gate"
+    type: "conditional_router"
+    conditions:
+      - condition: "state.identity_record.pep_flag == false && state.identity_record.document_valid == true"
+        next: "auto_approve_account"
+      - condition: "default"
+        next: "pause_for_compliance_officer"
+
+  - id: "auto_approve_account"
+    type: "tool_execution"
+    tool: "json_transform"
+    params:
+      expr: "{ status: 'APPROVED', tier: 'STANDARD', approved_at: 'now' }"
+    save_to: "approval_decision"
+
+  - id: "pause_for_compliance_officer"
+    type: "human_checkpoint"
+    description: "Compliance officer review for PEP flags or unverified credentials"
+    save_to: "compliance_review"

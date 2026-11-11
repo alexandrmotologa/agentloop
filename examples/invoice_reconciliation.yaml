@@ -1,0 +1,106 @@
+version: "1"
+workflow:
+  id: "vendor-invoice-reconciliation"
+  name: "Automated Vendor Invoice Auditing"
+  timeout: "5m"
+  max_healing_attempts: 3
+
+models:
+  primary:
+    provider: "openai"
+    model: "gpt-4o"
+    temperature: 0.1
+  healing:
+    provider: "openai"
+    model: "gpt-4o-mini"
+    temperature: 0.0
+
+state:
+  invoice_pdf_path: "./sample_invoice.pdf"
+  extracted_data: {}
+  erp_purchase_order: {}
+  reconciliation_result: {}
+
+nodes:
+  - id: "extract_invoice"
+    type: "llm_agent"
+    description: "Extract line items, tax IDs, and totals from invoice payload"
+    prompt: |
+      Extract structured invoice information from document path: {{ .state.invoice_pdf_path }}
+      Vendor: Acme Industrial Solutions Inc., Tax ID: US-94827104, Total: 4250.00 USD.
+      Line items: 2 Server Rack Units at 1800.00 each, 1 Gigabit Switch at 650.00.
+    output_schema:
+      type: "object"
+      required: ["vendor_name", "tax_id", "total_amount", "currency", "line_items"]
+      properties:
+        vendor_name: { type: "string" }
+        tax_id: { type: "string" }
+        total_amount: { type: "number" }
+        currency: { type: "string" }
+        line_items:
+          type: "array"
+          items:
+            type: "object"
+            required: ["description", "quantity", "unit_price", "total"]
+    save_to: "extracted_data"
+    on_failure:
+      strategy: "self_heal"
+      prompt_repair: "Verify table borders, check OCR artifacts, and align numbers strictly."
+
+  - id: "fetch_erp_po"
+    type: "tool_execution"
+    tool: "sqlite_query"
+    params:
+      query: "SELECT id, vendor_tax_id, vendor_name, total_amount, currency, status FROM purchase_orders WHERE vendor_tax_id = ? AND status = 'APPROVED'"
+      args: ["{{ .state.extracted_data.tax_id }}"]
+    save_to: "erp_purchase_order"
+    retry:
+      max_attempts: 3
+      backoff: "exponential"
+
+  - id: "reconcile_and_audit"
+    type: "llm_agent"
+    description: "Compare extracted invoice against approved purchase order"
+    prompt: |
+      Compare extracted invoice total {{ .state.extracted_data.total_amount }} with ERP PO total {{ .state.erp_purchase_order.total_amount }}.
+      Flag any price variance greater than 2% or unknown line items.
+    output_schema:
+      type: "object"
+      required: ["discrepancies", "is_approved", "variance_percentage", "summary"]
+      properties:
+        discrepancies: { type: "array", items: { type: "string" } }
+        is_approved: { type: "boolean" }
+        variance_percentage: { type: "number" }
+        summary: { type: "string" }
+    save_to: "reconciliation_result"
+    confidence_threshold: 0.85
+    on_low_confidence:
+      action: "pause_to_dlq"
+      reason: "Confidence below 85% on financial disbursement"
+
+  - id: "post_approval_or_reject"
+    type: "conditional_router"
+    conditions:
+      - condition: "len(state.reconciliation_result.discrepancies) == 0 && state.extracted_data.total_amount < 5000"
+        next: "auto_approve_payment"
+      - condition: "default"
+        next: "pause_for_human_review"
+
+  - id: "auto_approve_payment"
+    type: "tool_execution"
+    tool: "sqlite_query"
+    params:
+      query: "INSERT INTO purchase_orders (id, vendor_tax_id, vendor_name, total_amount, currency, status) VALUES ('PAY-RECORD-001', '{{ .state.extracted_data.tax_id }}', '{{ .state.extracted_data.vendor_name }}', {{ .state.extracted_data.total_amount }}, '{{ .state.extracted_data.currency }}', 'PAID')"
+    save_to: "payment_confirmation"
+
+  - id: "pause_for_human_review"
+    type: "human_checkpoint"
+    description: "Manual approval gate for invoices with discrepancies or totals exceeding threshold"
+    save_to: "human_review"
+
+notifications:
+  webhook:
+    url: "https://httpbin.org/post"
+  slack:
+    webhook_url: ""
+    channel: "#finance-ai-ops"
