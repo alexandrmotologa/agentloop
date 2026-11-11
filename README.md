@@ -1,6 +1,36 @@
-# agentloop
+<p align="center">
+  <img src="docs/images/logo.png" alt="agentloop Sentinel Logo" width="132" height="132" style="border-radius: 28px;" />
+</p>
 
-> Self-Healing Autonomous Enterprise Workflow Engine with Dead-Letter Queues & Human-in-the-Loop
+<h1 align="center">agentloop</h1>
+
+<p align="center">
+  <strong>Self-Healing Autonomous Enterprise Workflow Engine with Dead-Letter Queues & Human-in-the-Loop</strong>
+</p>
+
+<p align="center">
+  <a href="#live-demo">Demo</a> •
+  <a href="#core-capabilities">Features</a> •
+  <a href="#web-cockpit-and-visual-inspection">Cockpit UI</a> •
+  <a href="#quickstart">Quickstart</a> •
+  <a href="#architecture">Architecture</a> •
+  <a href="#rest-api-reference">API</a> •
+  <a href="#benchmarks">Benchmarks</a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/go-1.24-00ADD8?style=flat-square&logo=go" alt="Go Version" />
+  <img src="https://img.shields.io/badge/react-19-61DAFB?style=flat-square&logo=react" alt="React 19" />
+  <img src="https://img.shields.io/badge/storage-SQLite_WAL-003B57?style=flat-square&logo=sqlite" alt="SQLite WAL" />
+  <img src="https://img.shields.io/badge/overhead-%3C25ms-10B981?style=flat-square" alt="Overhead" />
+  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
+</p>
+
+---
+
+## Live Demo
+
+![agentloop Demo](docs/images/agentloop_demo.gif)
 
 agentloop is a deterministic workflow engine written in Go with an embedded React 19 cockpit. It treats AI agent execution as a recoverable state machine with sub-25ms node transition overhead, automated self-healing loops, state freezing in Dead-Letter Queues (DLQ), and one-click human intervention.
 
@@ -16,6 +46,30 @@ More than 85% of autonomous AI agent pilots stall or fail in production environm
 4. Runaway Spend and Unpredictable Costs: Infinite reflection loops or prompt explosions rapidly deplete API quotas without deterministic circuit breakers.
 
 agentloop resolves these issues by combining deterministic directed acyclic graphs (DAGs) with autonomous self-healing sentinels, token and cost budget guards, checkpoint state freezing, and an operator console.
+
+---
+
+## Web Cockpit and Visual Inspection
+
+agentloop compiles into a single binary containing an embedded React 19 operations cockpit. Operators monitor active workflows, inspect breakpoint states, and resolve incidents without external dependencies.
+
+### Enterprise Dashboard
+Real-time telemetry stream, active execution states, token metrics, and instant Dead-Letter Queue alerts.
+![Dashboard Overview](docs/images/dashboard_preview.png)
+
+### Side-by-Side Visual State Diff & HITL Patching
+Inspect frozen DLQ memory against baseline state with variable diff highlighting (added, modified, removed) and operator resumption controls.
+![DLQ State Diff](docs/images/dlq_diff_preview.png)
+
+### DAG Step-Through Breakpoint Debugger
+Set execution breakpoints directly on DAG nodes, advance step-by-step, and inspect memory state before each state transition.
+![Breakpoint Debugger](docs/images/workflow_dag_preview.png)
+
+### Responsive Mobile Operations
+Full operational control across handheld viewports (390px iPhone, tablets) with quick-access navigation and instant alert resolution.
+<p align="center">
+  <img src="docs/images/mobile_dashboard_preview.png" alt="Mobile Dashboard" width="390" />
+</p>
 
 ---
 
@@ -98,10 +152,9 @@ agentloop resolves these issues by combining deterministic directed acyclic grap
                                                                             +------------------------------+
                                                                             |     Embedded HITL Cockpit    |
                                                                             |  - Visual State Diff (Added) |
-                                                                            |  - Step Debugger (F10/F5)    |
+                                                                            |  - State Patch Editor        |
+                                                                            |  - Human Direction Prompt    |
                                                                             |  - One-Click Resume / Abort  |
-                                                                            |  - State Rewind Time-Travel  |
-                                                                            |  - Compliance Report Export  |
                                                                             +------------------------------+
 ```
 
@@ -109,172 +162,102 @@ agentloop resolves these issues by combining deterministic directed acyclic grap
 
 ## Quickstart
 
-### Prerequisites
-- Go 1.22+ installed
-- Node.js 20+ installed (for building frontend assets)
+### 1. Prerequisites
 
-### 1. Build
+- Go 1.22 or higher
+- Node.js 18+ (only required if building frontend from source)
+- SQLite3 (included automatically via modern pure-Go or cgo-free SQLite driver)
+
+### 2. Build from Source
+
+Build the React cockpit and compile the standalone single binary:
+
 ```bash
 git clone https://github.com/alexandrmotologa/agentloop.git
 cd agentloop
-make build
+
+# 1. Build frontend assets
+cd web
+npm install
+npm run build
+cd ..
+
+# 2. Compile standalone Go binary with embedded frontend
+go build -o agentloop ./cmd/agentloop
 ```
 
-### 2. Validate Workflow Specification
+### 3. Launch the Server
+
 ```bash
-./agentloop validate --file ./examples/invoice_reconciliation.yaml
+./agentloop serve --port 8080 --db ./data/agentloop.db
 ```
 
-Output:
-```
-✓ Workflow 'Automated Vendor Invoice Auditing' (vendor-invoice-reconciliation) is valid.
-✓ DAG contains 6 nodes, zero cycles detected.
-✓ Topological execution order:
-  1. extract_invoice          [llm_agent]
-  2. fetch_erp_po             [tool_execution]
-  3. reconcile_and_audit      [llm_agent]
-  4. post_approval_or_reject  [conditional_router]
-  5. auto_approve_payment     [tool_execution]
-  6. pause_for_human_review   [human_checkpoint]
-```
-
-### 3. Run Workflow from CLI
-```bash
-./agentloop run --file ./examples/invoice_reconciliation.yaml
-```
-
-### 4. Generate Compliance Report
-```bash
-./agentloop report --id exec_734800df --format markdown --out audit_report.md
-```
-
-### 5. Start the Web Console & Scheduler
-```bash
-./agentloop serve --port 8080 --db ./agentloop.db
-```
-
-Open `http://localhost:8080` in your browser to access the HITL cockpit.
+Open your browser at `http://localhost:8080` to access the React 19 cockpit.
 
 ---
 
-## Workflow Specification
+## Enterprise Workflows Included
 
-Workflows are written in declarative YAML specifications:
+The repository includes enterprise-grade workflow specifications ready for execution:
 
-```yaml
-version: "1"
-workflow:
-  id: "vendor-invoice-reconciliation"
-  name: "Automated Vendor Invoice Auditing"
-  timeout: "5m"
-  max_healing_attempts: 3
-  schedule: "@hourly" # Optional recurring schedule
-  webhook_secret: "prod-secret-key" # Optional HMAC-SHA256 secret
+1. `vendor-invoice-reconciliation.yaml`: Ingests vendor invoices via OCR/JSON, reconciles totals against internal purchase orders in SQLite, detects variances (>5%), applies autonomous self-healing, and triggers human approval if reconciliation variance exceeds critical safety bounds.
+2. `customer-kyc-validation.yaml`: Multi-step KYC verification pipeline extracting identity documents, scoring compliance fraud risk, verifying sanction screening databases, and escalating suspicious accounts to compliance operators.
+3. `cloud-incident-remediation.yaml`: Automated SRE incident triage pipeline ingesting Datadog/CloudWatch alerts, querying diagnostic logs, assessing blast radius, executing non-destructive mitigation runbooks, and freezing state for human review on destructive remediation steps.
 
-budget:
-  max_total_tokens: 50000
-  max_cost_usd: 0.25
-  on_exceeded: "pause_to_dlq"
+Run an example workflow via CLI:
 
-models:
-  primary:
-    provider: "openai" # openai, anthropic, ollama, or mock
-    model: "gpt-4o"
-    temperature: 0.1
-    fallback_models: ["gpt-4o-mini", "claude-3-5-sonnet"]
-  healing:
-    provider: "openai"
-    model: "gpt-4o-mini"
-    temperature: 0.0
-
-state:
-  invoice_pdf_path: "./sample_invoice.pdf"
-  extracted_data: {}
-  erp_purchase_order: {}
-  reconciliation_result: {}
-
-nodes:
-  - id: "extract_invoice"
-    type: "llm_agent"
-    prompt: |
-      Extract structured invoice information from document path: {{ .state.invoice_pdf_path }}
-    output_schema:
-      type: "object"
-      required: ["vendor_name", "tax_id", "total_amount", "currency", "line_items"]
-      properties:
-        vendor_name: { type: "string" }
-        tax_id: { type: "string" }
-        total_amount: { type: "number" }
-        currency: { type: "string" }
-        line_items:
-          type: "array"
-          items:
-            type: "object"
-            required: ["description", "quantity", "unit_price", "total"]
-    save_to: "extracted_data"
-    on_failure:
-      strategy: "self_heal"
-      prompt_repair: "Verify table borders, check OCR artifacts, and align numbers strictly."
-
-  - id: "fetch_erp_po"
-    type: "tool_execution"
-    tool: "sqlite_query"
-    params:
-      query: "SELECT id, vendor_tax_id, total_amount, currency, status FROM purchase_orders WHERE vendor_tax_id = ? AND status = 'APPROVED'"
-      args: ["{{ .state.extracted_data.tax_id }}"]
-    save_to: "erp_purchase_order"
-    retry:
-      max_attempts: 3
-      backoff: "exponential"
-
-  - id: "reconcile_and_audit"
-    type: "llm_agent"
-    breakpoint: false # Toggle to true to pause execution before this node
-    prompt: |
-      Compare extracted invoice total {{ .state.extracted_data.total_amount }} with ERP PO total {{ .state.erp_purchase_order.total_amount }}.
-      Flag any price variance greater than 2% or unknown line items.
-    output_schema:
-      type: "object"
-      required: ["discrepancies", "is_approved", "variance_percentage", "summary"]
-      properties:
-        discrepancies: { type: "array", items: { type: "string" } }
-        is_approved: { type: "boolean" }
-        variance_percentage: { type: "number" }
-        summary: { type: "string" }
-    save_to: "reconciliation_result"
-    confidence_threshold: 0.85
-    on_low_confidence:
-      action: "pause_to_dlq"
-      reason: "Confidence below 85% on financial disbursement"
-
-  - id: "post_approval_or_reject"
-    type: "conditional_router"
-    conditions:
-      - condition: "len(state.reconciliation_result.discrepancies) == 0 && state.extracted_data.total_amount < 5000"
-        next: "auto_approve_payment"
-      - condition: "default"
-        next: "pause_for_human_review"
-
-  - id: "auto_approve_payment"
-    type: "tool_execution"
-    tool: "sqlite_query"
-    params:
-      query: "INSERT INTO purchase_orders (id, vendor_tax_id, vendor_name, total_amount, currency, status) VALUES ('PAY-RECORD-001', '{{ .state.extracted_data.tax_id }}', '{{ .state.extracted_data.vendor_name }}', {{ .state.extracted_data.total_amount }}, '{{ .state.extracted_data.currency }}', 'PAID')"
-    save_to: "payment_confirmation"
-
-  - id: "pause_for_human_review"
-    type: "human_checkpoint"
-    description: "Manual approval gate for invoices with discrepancies or totals exceeding threshold"
-    save_to: "human_review"
+```bash
+./agentloop run examples/vendor-invoice-reconciliation.yaml \
+  --input '{"invoice_id": "INV-2026-904", "vendor": "Acme Cloud", "amount": 14250.00}'
 ```
 
 ---
 
-## Dead-Letter Queue & Human-in-the-Loop CLI
+## Failure & Self-Healing Walkthrough
 
-Inspect suspended items:
+When an LLM node fails schema validation (for example, missing a mandatory `confidence` property or providing a string instead of an integer array):
+
+1. Sentinel Interception: The schema validator captures the validation error with JSON pointer paths (`required property 'confidence' is missing`).
+2. Reflection Sub-Agent: An automated healing routine analyzes the error:
+   ```json
+   {
+     "error_type": "SCHEMA_VALIDATION_ERROR",
+     "missing_field": "confidence",
+     "repair_action": "ENFORCE_JSON_SCHEMA_REPROMPT"
+   }
+   ```
+3. Context Preservation: The original state, memory variables, and preceding step outputs remain intact.
+4. Reprompt Synthesis: The engine issues an augmented prompt to the model:
+   > "Your previous response violated the output JSON schema: missing required property 'confidence'. Return ONLY valid JSON adhering strictly to the schema."
+5. Escalation: If 3 consecutive healing attempts fail or the token budget is reached, the execution transitions into the Dead-Letter Queue.
+
+---
+
+## Breakpoint Debugging Walkthrough
+
+agentloop supports developer breakpoints for inspect-and-step debugging:
+
+1. Set Breakpoints on DAG Nodes:
+   ```bash
+   ./agentloop breakpoint add --workflow vendor-invoice-reconciliation --node reconcile_and_audit
+   ```
+2. Trigger Execution: The engine executes preceding nodes at full speed and freezes immediately before executing the target node.
+3. Step Forward: Use the UI or API to advance one step:
+   ```bash
+   curl -X POST http://localhost:8080/api/executions/{id}/step
+   ```
+4. Inspect State: Read exact memory variables before mutation.
+5. Continue: Resume normal execution until the next breakpoint.
+
+---
+
+## Dead-Letter Queue & Human-in-the-Loop Operations
+
+When an execution freezes in DLQ:
+
+List active incidents:
 ```bash
-./agentloop dlq list --status PENDING
+./agentloop dlq list
 ```
 
 Inspect frozen state:
@@ -327,7 +310,7 @@ Resume execution with natural language operator directive and state patch:
 | Node Transition Overhead | &lt; 25ms | ~0.37ms - 1.1ms |
 | DAG Cycle Validation | Instant | &lt; 50µs |
 | SQLite State Snapshot Persistence | &lt; 5ms (WAL mode) | ~0.2ms |
-| Frontend Asset Bundle Size | Minimal | 89 kB gzipped |
+| Frontend Asset Bundle Size | Minimal | 89.9 kB gzipped |
 
 ---
 

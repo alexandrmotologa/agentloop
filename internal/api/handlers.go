@@ -182,6 +182,9 @@ func (a *API) HandleGetAuditLogs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if logs == nil {
+		logs = []types.StepAuditEntry{}
+	}
 	writeJSON(w, http.StatusOK, logs)
 }
 
@@ -193,6 +196,9 @@ func (a *API) HandleGetHealingLogs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	if logs == nil {
+		logs = []types.HealingLogEntry{}
+	}
 	writeJSON(w, http.StatusOK, logs)
 }
 
@@ -203,6 +209,9 @@ func (a *API) HandleGetSnapshots(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	if snaps == nil {
+		snaps = []types.StateSnapshot{}
 	}
 	writeJSON(w, http.StatusOK, snaps)
 }

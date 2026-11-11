@@ -40,7 +40,9 @@ export const api = {
     if (status) params.append('status', status);
     params.append('limit', limit.toString());
     const res = await fetch(`${BASE_URL}/executions?${params.toString()}`);
-    return res.json();
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   },
 
   getExecution: async (id: string): Promise<Execution> => {
@@ -51,17 +53,23 @@ export const api = {
 
   getAuditLogs: async (executionId: string): Promise<StepAuditEntry[]> => {
     const res = await fetch(`${BASE_URL}/executions/${executionId}/audit`);
-    return res.json();
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   },
 
   getHealingLogs: async (executionId: string): Promise<HealingLogEntry[]> => {
     const res = await fetch(`${BASE_URL}/executions/${executionId}/healing`);
-    return res.json();
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   },
 
   getSnapshots: async (executionId: string): Promise<StateSnapshot[]> => {
     const res = await fetch(`${BASE_URL}/executions/${executionId}/snapshots`);
-    return res.json();
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   },
 
   rewindExecution: async (executionId: string, targetNodeId: string): Promise<Execution> => {
@@ -139,7 +147,9 @@ export const api = {
     const params = new URLSearchParams();
     if (status) params.append('status', status);
     const res = await fetch(`${BASE_URL}/dlq?${params.toString()}`);
-    return res.json();
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data) ? data : [];
   },
 
   getDLQItem: async (id: string): Promise<DLQItem> => {

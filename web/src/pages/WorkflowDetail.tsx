@@ -56,8 +56,8 @@ export const WorkflowDetail: React.FC<WorkflowDetailProps> = ({
 
       setSpec(wfData.spec);
       setRawYAML(wfData.raw_yaml);
-      setAuditLogs(auditData);
-      setHealingLogs(healingData);
+      setAuditLogs(Array.isArray(auditData) ? auditData : []);
+      setHealingLogs(Array.isArray(healingData) ? healingData : []);
     } catch (err) {
       console.error(err);
     } finally {
@@ -335,7 +335,7 @@ export const WorkflowDetail: React.FC<WorkflowDetailProps> = ({
                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
             }`}
           >
-            Compliance Replay ({auditLogs.length})
+            Compliance Replay ({(auditLogs || []).length})
           </button>
           <button
             onClick={() => setActiveTab('healing')}
@@ -346,7 +346,7 @@ export const WorkflowDetail: React.FC<WorkflowDetailProps> = ({
             }`}
           >
             <Sparkles className="w-4 h-4" />
-            Self-Healing Logs ({healingLogs.length})
+            Self-Healing Logs ({(healingLogs || []).length})
           </button>
           <button
             onClick={() => setActiveTab('report')}

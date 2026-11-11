@@ -166,6 +166,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               PAUSED_DLQ
                             </span>
                           )}
+                          {exec.status === 'HALTED_BREAKPOINT' && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                              BREAKPOINT
+                            </span>
+                          )}
                           {exec.status === 'FAILED' && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-500/10 text-rose-400 border border-rose-500/30">
                               FAILED

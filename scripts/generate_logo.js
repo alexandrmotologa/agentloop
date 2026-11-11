@@ -1,0 +1,310 @@
+const fs = require('fs');
+const path = require('path');
+const { Resvg } = require('@resvg/resvg-js');
+
+function buildLogoSvg() {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <clipPath id="squircle-clip">
+      <rect x="24" y="24" width="976" height="976" rx="220" />
+    </clipPath>
+
+    <linearGradient id="cyan-glow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="50%" stop-color="#00f5ff"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+
+    <linearGradient id="amber-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a"/>
+      <stop offset="30%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#b45309"/>
+    </linearGradient>
+
+    <linearGradient id="f-hi" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#94a3b8"/>
+      <stop offset="100%" stop-color="#64748b"/>
+    </linearGradient>
+
+    <linearGradient id="f-bright" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#64748b"/>
+      <stop offset="100%" stop-color="#475569"/>
+    </linearGradient>
+
+    <linearGradient id="f-lit" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#475569"/>
+      <stop offset="100%" stop-color="#334155"/>
+    </linearGradient>
+
+    <linearGradient id="f-mid" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#334155"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+
+    <linearGradient id="f-dark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+
+    <filter id="subtle-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.16" />
+    </filter>
+  </defs>
+
+  <!-- Luxury White Squircle Container -->
+  <rect x="24" y="24" width="976" height="976" rx="220" fill="#ffffff" stroke="#e2e8f0" stroke-width="6" />
+
+  <g clip-path="url(#squircle-clip)">
+    <g transform="translate(512, 512)" filter="url(#subtle-shadow)">
+
+      <!-- Outer Hexagonal Architectural Gateway Frame -->
+      <polygon points="
+        0,-410
+        355,-205
+        355,205
+        0,410
+        -355,205
+        -355,-205
+      " fill="none" stroke="#0f172a" stroke-width="36" stroke-linejoin="round" />
+
+      <!-- Inner Dashed Telemetry Hexagon -->
+      <polygon points="
+        0,-375
+        324,-187
+        324,187
+        0,375
+        -324,187
+        -324,-187
+      " fill="none" stroke="#00f5ff" stroke-width="4" opacity="0.4" stroke-dasharray="16, 12" />
+
+      <!-- Solid Watertight Silhouette Base (Prevents Background Bleed) -->
+      <polygon points="
+        0,-340
+        80,-300
+        150,-355
+        130,-210
+        240,-120
+        280,30
+        220,190
+        130,290
+        0,360
+        -130,290
+        -220,190
+        -280,30
+        -240,-120
+        -130,-210
+        -150,-355
+        -80,-300
+      " fill="#0f172a" stroke="#0f172a" stroke-width="4" stroke-linejoin="round" />
+
+      <!-- ================= 1. CROWN & FOREHEAD ================= -->
+      <!-- Center Forehead Diamond -->
+      <polygon points="0,-340 50,-260 0,-230" fill="url(#f-hi)" />
+      <polygon points="0,-340 -50,-260 0,-230" fill="url(#f-bright)" />
+
+      <!-- Crown Lateral Crests -->
+      <polygon points="0,-340 80,-300 50,-260" fill="url(#f-bright)" />
+      <polygon points="0,-340 -80,-300 -50,-260" fill="url(#f-lit)" />
+
+      <!-- Raptor Crest Horn Feathers -->
+      <polygon points="80,-300 150,-355 130,-210 50,-260" fill="url(#f-hi)" />
+      <polygon points="-80,-300 -150,-355 -130,-210 -50,-260" fill="url(#f-lit)" />
+
+      <!-- Brow Upper Plate -->
+      <polygon points="0,-230 50,-260 65,-180 0,-195" fill="url(#f-bright)" />
+      <polygon points="0,-230 -50,-260 -65,-180 0,-195" fill="url(#f-lit)" />
+
+      <!-- Supraorbital Visor Ridges -->
+      <polygon points="0,-195 65,-180 110,-140 45,-140" fill="url(#f-hi)" />
+      <polygon points="0,-195 -65,-180 -110,-140 -45,-140" fill="url(#f-mid)" />
+
+      <!-- ================= 2. PREDATOR RAPTOR OPTICS ================= -->
+      <!-- Left Eye Socket & Slanted Cyan Iris -->
+      <polygon points="-45,-140 -105,-140 -75,-100" fill="#070a12" stroke="#00f5ff" stroke-width="2" />
+      <polygon points="-52,-134 -95,-134 -72,-106" fill="url(#cyan-glow)" />
+      <polygon points="-72,-130 -76,-120 -68,-114" fill="#070a12" />
+
+      <!-- Right Eye Socket & Slanted Cyan Iris -->
+      <polygon points="45,-140 105,-140 75,-100" fill="#070a12" stroke="#00f5ff" stroke-width="2" />
+      <polygon points="52,-134 95,-134 72,-106" fill="url(#cyan-glow)" />
+      <polygon points="72,-130 76,-120 68,-114" fill="#070a12" />
+
+      <!-- ================= 3. SNOUT BRIDGE & AMBER GOLDEN BEAK ================= -->
+      <!-- Culmen (Snout Bridge) -->
+      <polygon points="0,-195 45,-140 0,-80" fill="url(#f-hi)" />
+      <polygon points="0,-195 -45,-140 0,-80" fill="url(#f-bright)" />
+
+      <polygon points="45,-140 32,-40 0,-80" fill="url(#f-bright)" />
+      <polygon points="-45,-140 -32,-40 0,-80" fill="url(#f-lit)" />
+
+      <!-- Hooked Amber Gold Beak (Iconic Raptor Hook) -->
+      <polygon points="0,-80 32,-40 0,40" fill="url(#amber-gold)" stroke="#0f172a" stroke-width="1.5" />
+      <polygon points="0,-80 -32,-40 0,40" fill="#b45309" stroke="#0f172a" stroke-width="1.5" />
+      <line x1="0" y1="-80" x2="0" y2="40" stroke="#78350f" stroke-width="2" />
+
+      <!-- ================= 4. CHEEK MALAR FEATHERS ================= -->
+      <!-- Inner Cheeks (Adjacent to Beak) -->
+      <polygon points="45,-140 75,-100 32,-40" fill="url(#f-hi)" />
+      <polygon points="-45,-140 -75,-100 -32,-40" fill="url(#f-lit)" />
+
+      <polygon points="75,-100 65,-20 32,-40" fill="url(#f-bright)" />
+      <polygon points="-75,-100 -65,-20 -32,-40" fill="url(#f-mid)" />
+
+      <!-- Outer Cheeks -->
+      <polygon points="110,-140 130,-70 75,-100" fill="url(#f-bright)" />
+      <polygon points="-110,-140 -130,-70 -75,-100" fill="url(#f-dark)" />
+
+      <polygon points="75,-100 130,-70 65,-20" fill="url(#f-lit)" />
+      <polygon points="-75,-100 -130,-70 -65,-20" fill="url(#f-mid)" />
+
+      <!-- Cheek Base Flares -->
+      <polygon points="130,-70 100,20 65,-20" fill="url(#f-bright)" />
+      <polygon points="-130,-70 -100,20 -65,-20" fill="url(#f-dark)" />
+
+      <!-- ================= 5. THROAT & CHIN SHIELD ================= -->
+      <polygon points="0,40 32,-40 65,-20" fill="url(#f-hi)" />
+      <polygon points="0,40 -32,-40 -65,-20" fill="url(#f-lit)" />
+
+      <polygon points="0,40 65,-20 50,60" fill="url(#f-bright)" />
+      <polygon points="0,40 -65,-20 -50,60" fill="url(#f-mid)" />
+
+      <polygon points="0,40 50,60 0,90" fill="url(#f-hi)" />
+      <polygon points="0,40 -50,60 0,90" fill="url(#f-lit)" />
+
+      <!-- Throat Flanks -->
+      <polygon points="65,-20 100,20 50,60" fill="url(#f-lit)" />
+      <polygon points="-65,-20 -100,20 -50,60" fill="url(#f-dark)" />
+
+      <polygon points="100,20 110,80 50,60" fill="url(#f-bright)" />
+      <polygon points="-100,20 -110,80 -50,60" fill="url(#f-mid)" />
+
+      <!-- ================= 6. PECTORAL COLLAR & REACTOR MOUNT ================= -->
+      <polygon points="0,90 50,60 60,150 0,180" fill="url(#f-hi)" />
+      <polygon points="0,90 -50,60 -60,150 0,180" fill="url(#f-lit)" />
+
+      <polygon points="50,60 110,80 60,150" fill="url(#f-bright)" />
+      <polygon points="-50,60 -110,80 -60,150" fill="url(#f-dark)" />
+
+      <polygon points="110,80 120,110 60,150" fill="url(#f-lit)" />
+      <polygon points="-110,80 -120,110 -60,150" fill="url(#f-mid)" />
+
+      <!-- ================= 7. FOLDED WINGS (DAG Execution Nodes) ================= -->
+      <!-- Right Wing Top & Primaries -->
+      <polygon points="130,-210 240,-120 180,-60 110,-140" fill="url(#f-hi)" />
+      <polygon points="110,-140 180,-60 130,-70" fill="url(#f-bright)" />
+      <polygon points="240,-120 280,30 180,-60" fill="url(#f-bright)" />
+      <polygon points="180,-60 280,30 200,40" fill="url(#f-lit)" />
+      <polygon points="180,-60 200,40 100,20" fill="url(#f-bright)" />
+      <polygon points="180,-60 100,20 130,-70" fill="url(#f-lit)" />
+
+      <polygon points="200,40 280,30 220,190" fill="url(#f-lit)" />
+      <polygon points="200,40 220,190 160,130" fill="url(#f-bright)" />
+      <polygon points="200,40 160,130 120,110" fill="url(#f-lit)" />
+      <polygon points="200,40 120,110 100,20" fill="url(#f-mid)" />
+
+      <polygon points="160,130 220,190 130,290" fill="url(#f-mid)" />
+      <polygon points="160,130 130,290 110,190" fill="url(#f-bright)" />
+      <polygon points="160,130 110,190 60,150" fill="url(#f-lit)" />
+      <polygon points="160,130 60,150 120,110" fill="url(#f-bright)" />
+
+      <!-- Left Wing Top & Primaries -->
+      <polygon points="-130,-210 -240,-120 -180,-60 -110,-140" fill="url(#f-lit)" />
+      <polygon points="-110,-140 -180,-60 -130,-70" fill="url(#f-mid)" />
+      <polygon points="-240,-120 -280,30 -180,-60" fill="url(#f-mid)" />
+      <polygon points="-180,-60 -280,30 -200,40" fill="url(#f-dark)" />
+      <polygon points="-180,-60 -200,40 -100,20" fill="url(#f-lit)" />
+      <polygon points="-180,-60 -100,20 -130,-70" fill="url(#f-mid)" />
+
+      <polygon points="-200,40 -280,30 -220,190" fill="url(#f-dark)" />
+      <polygon points="-200,40 -220,190 -160,130" fill="url(#f-mid)" />
+      <polygon points="-200,40 -160,130 -120,110" fill="url(#f-dark)" />
+      <polygon points="-200,40 -120,110 -100,20" fill="url(#f-mid)" />
+
+      <polygon points="-160,130 -220,190 -130,290" fill="url(#f-dark)" />
+      <polygon points="-160,130 -130,290 -110,190" fill="url(#f-mid)" />
+      <polygon points="-160,130 -110,190 -60,150" fill="url(#f-dark)" />
+      <polygon points="-160,130 -60,150 -120,110" fill="url(#f-mid)" />
+
+      <!-- ================= 8. CENTRAL SENTINEL NEXUS REACTOR ================= -->
+      <!-- Outer Hexagonal Housing -->
+      <polygon points="
+        0,180
+        50,205
+        50,265
+        0,290
+        -50,265
+        -50,205
+      " fill="#070a12" stroke="#00f5ff" stroke-width="4" stroke-linejoin="round" />
+
+      <!-- Glowing Cyan Reactor Core -->
+      <polygon points="
+        0,192
+        38,212
+        38,258
+        0,278
+        -38,258
+        -38,212
+      " fill="url(#cyan-glow)" />
+
+      <!-- Concentric Amber Pulse Center -->
+      <circle cx="0" cy="235" r="11" fill="url(#amber-gold)" stroke="#070a12" stroke-width="2" />
+
+      <!-- ================= 9. ABDOMINAL KEEL & TAIL SPIRE ================= -->
+      <polygon points="0,290 50,265 110,190" fill="url(#f-lit)" />
+      <polygon points="0,290 -50,265 -110,190" fill="url(#f-dark)" />
+
+      <polygon points="0,290 110,190 80,310 0,330" fill="url(#f-bright)" />
+      <polygon points="0,290 -110,190 -80,310 0,330" fill="url(#f-mid)" />
+
+      <polygon points="110,190 130,290 80,310" fill="url(#f-lit)" />
+      <polygon points="-110,190 -130,290 -80,310" fill="url(#f-dark)" />
+
+      <!-- Tail Anchor Spire -->
+      <polygon points="0,330 80,310 0,360" fill="url(#f-hi)" />
+      <polygon points="0,330 -80,310 0,360" fill="url(#f-lit)" />
+
+      <!-- ================= 10. TACTICAL PRECISION VECTOR ACCENTS ================= -->
+      <!-- Dorsal Centerline -->
+      <line x1="0" y1="-340" x2="0" y2="-195" stroke="#00f5ff" stroke-width="2.5" opacity="0.75" />
+      <line x1="0" y1="290" x2="0" y2="360" stroke="#00f5ff" stroke-width="2.5" opacity="0.75" />
+
+      <!-- Sentinel Node Satellites (DAG Junctions) -->
+      <circle cx="-150" cy="-355" r="5" fill="#00f5ff" />
+      <circle cx="150" cy="-355" r="5" fill="#00f5ff" />
+      <circle cx="-240" cy="-120" r="4.5" fill="#00f5ff" />
+      <circle cx="240" cy="-120" r="4.5" fill="#00f5ff" />
+      <circle cx="-280" cy="30" r="5" fill="#00f5ff" />
+      <circle cx="280" cy="30" r="5" fill="#00f5ff" />
+      <circle cx="-220" cy="190" r="4.5" fill="#00f5ff" />
+      <circle cx="220" cy="190" r="4.5" fill="#00f5ff" />
+      <circle cx="0" cy="360" r="6" fill="#00f5ff" />
+    </g>
+  </g>
+</svg>`;
+}
+
+async function renderLogo() {
+  const outputDir = path.join(__dirname, '..', 'docs', 'images');
+  fs.mkdirSync(outputDir, { recursive: true });
+
+  const svg = buildLogoSvg();
+  const svgPath = path.join(outputDir, 'logo.svg');
+  const pngPath = path.join(outputDir, 'logo.png');
+
+  fs.writeFileSync(svgPath, svg);
+  console.log('✓ Written SVG to', svgPath);
+
+  const resvg = new Resvg(svg, {
+    fitTo: {
+      mode: 'width',
+      value: 1024,
+    },
+  });
+
+  const pngData = resvg.render();
+  const pngBuffer = pngData.asPng();
+  fs.writeFileSync(pngPath, pngBuffer);
+  console.log('✓ Successfully rendered logo.png (1024x1024) at', pngPath);
+}
+
+renderLogo().catch(console.error);
