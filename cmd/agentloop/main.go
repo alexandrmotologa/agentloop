@@ -43,7 +43,7 @@ func main() {
 		cmdValidate(os.Args[2:])
 	case "report":
 		cmdReport(os.Args[2:])
-	case "version", "--version", "-v":
+	case "version", "--version", "-v", "-V":
 		fmt.Printf("agentloop version %s (Go runtime %s)\n", version, "1.24")
 	case "help", "--help", "-h":
 		printHelp()

@@ -19,11 +19,13 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/alexandrmotologa/agentloop/actions/workflows/ci.yml"><img src="https://github.com/alexandrmotologa/agentloop/actions/workflows/ci.yml/badge.svg" alt="CI Status" /></a>
+  <a href="https://github.com/alexandrmotologa/agentloop/releases"><img src="https://img.shields.io/github/v/release/alexandrmotologa/agentloop?color=blue" alt="Release" /></a>
   <img src="https://img.shields.io/badge/go-1.24-00ADD8?style=flat-square&logo=go" alt="Go Version" />
   <img src="https://img.shields.io/badge/react-19-61DAFB?style=flat-square&logo=react" alt="React 19" />
   <img src="https://img.shields.io/badge/storage-SQLite_WAL-003B57?style=flat-square&logo=sqlite" alt="SQLite WAL" />
   <img src="https://img.shields.io/badge/overhead-%3C25ms-10B981?style=flat-square" alt="Overhead" />
-  <img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue?style=flat-square" alt="License" /></a>
 </p>
 
 ---
